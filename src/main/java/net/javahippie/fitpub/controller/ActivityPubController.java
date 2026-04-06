@@ -291,50 +291,62 @@ public class ActivityPubController {
     }
 
     /**
-     * Format activity content for ActivityPub.
-     * Uses plain text with Unicode symbols for maximum compatibility.
+     * Format activity content as HTML for ActivityPub.
+     * Mastodon and most Fediverse software expect HTML in the content field.
      */
     private String formatActivityContent(Activity activity) {
         StringBuilder content = new StringBuilder();
 
-        // Title (if present)
+        // Title
         if (activity.getTitle() != null && !activity.getTitle().isEmpty()) {
-            content.append(activity.getTitle()).append("\n\n");
+            content.append("<p><strong>").append(escapeHtml(activity.getTitle())).append("</strong></p>");
         }
 
-        // Description (if present)
+        // Description
         if (activity.getDescription() != null && !activity.getDescription().isEmpty()) {
-            content.append(activity.getDescription()).append("\n\n");
+            content.append("<p>").append(escapeHtml(activity.getDescription())).append("</p>");
         }
 
         // Activity type with emoji
         String activityEmoji = getActivityEmoji(activity.getActivityType());
         String formattedType = ActivityFormatter.formatActivityType(activity.getActivityType());
-        content.append(activityEmoji).append(" ").append(formattedType);
+        content.append("<p>").append(activityEmoji).append(" ").append(escapeHtml(formattedType)).append("</p>");
 
         // Metrics
+        StringBuilder metrics = new StringBuilder();
         if (activity.getTotalDistance() != null) {
-            content.append("\n📏 ")
-                .append(String.format("%.2f km", activity.getTotalDistance().doubleValue() / 1000.0));
+            metrics.append("📏 ")
+                .append(String.format("%.2f km", activity.getTotalDistance().doubleValue() / 1000.0))
+                .append("<br>");
         }
-
         if (activity.getTotalDurationSeconds() != null) {
             long hours = activity.getTotalDurationSeconds() / 3600;
             long minutes = (activity.getTotalDurationSeconds() % 3600) / 60;
             long seconds = activity.getTotalDurationSeconds() % 60;
-            content.append("\n⏱️ ");
+            metrics.append("⏱️ ");
             if (hours > 0) {
-                content.append(hours).append("h ");
+                metrics.append(hours).append("h ");
             }
-            content.append(minutes).append("m ").append(seconds).append("s");
+            metrics.append(minutes).append("m ").append(seconds).append("s").append("<br>");
         }
-
         if (activity.getElevationGain() != null) {
-            content.append("\n⛰️ ")
-                .append(String.format("%.0f m", activity.getElevationGain().doubleValue()));
+            metrics.append("⛰️ ")
+                .append(String.format("%.0f m", activity.getElevationGain().doubleValue()))
+                .append("<br>");
+        }
+        if (metrics.length() > 0) {
+            content.append("<p>").append(metrics).append("</p>");
         }
 
         return content.toString();
+    }
+
+    private static String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;");
     }
 
     /**

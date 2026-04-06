@@ -216,47 +216,33 @@ public class ActivityPostProcessingService {
     }
 
     /**
-     * Format activity content for ActivityPub Note.
-     * Uses plain text with Unicode symbols for maximum compatibility across Fediverse platforms.
-     *
-     * Format:
-     * - Title (if present)
-     * - Description (if present)
-     * - Activity type with emoji
-     * - Distance (if present)
-     * - Duration (if present)
-     * - Elevation gain (if present)
+     * Format activity content as HTML for ActivityPub Note.
+     * Mastodon and most Fediverse software expect HTML in the content field.
      *
      * @param activity the activity to format
-     * @return formatted content string
+     * @return formatted HTML content string
      */
     private String formatActivityContent(Activity activity) {
         StringBuilder content = new StringBuilder();
 
-        // Title (if present)
         if (activity.getTitle() != null && !activity.getTitle().isEmpty()) {
-            content.append(activity.getTitle()).append("\n\n");
+            content.append("<p><strong>").append(escapeHtml(activity.getTitle())).append("</strong></p>");
         }
 
-        // Description (if present)
         if (activity.getDescription() != null && !activity.getDescription().isEmpty()) {
-            content.append(activity.getDescription()).append("\n\n");
+            content.append("<p>").append(escapeHtml(activity.getDescription())).append("</p>");
         }
 
-        // Activity type with emoji
         String activityEmoji = getActivityEmoji(activity.getActivityType());
         String formattedType = ActivityFormatter.formatActivityType(activity.getActivityType());
-        content.append(activityEmoji).append(" ").append(formattedType);
+        content.append("<p>").append(activityEmoji).append(" ").append(escapeHtml(formattedType)).append("</p>");
 
-        // Metrics, each on its own line with a blank line separating from above
         StringBuilder metrics = new StringBuilder();
-
         if (activity.getTotalDistance() != null) {
             metrics.append("📏 ")
                 .append(String.format("%.2f km", activity.getTotalDistance().doubleValue() / 1000.0))
-                .append("\n");
+                .append("<br>");
         }
-
         if (activity.getTotalDurationSeconds() != null) {
             long hours = activity.getTotalDurationSeconds() / 3600;
             long minutes = (activity.getTotalDurationSeconds() % 3600) / 60;
@@ -265,21 +251,26 @@ public class ActivityPostProcessingService {
             if (hours > 0) {
                 metrics.append(hours).append("h ");
             }
-            metrics.append(minutes).append("m ").append(seconds).append("s")
-                .append("\n");
+            metrics.append(minutes).append("m ").append(seconds).append("s").append("<br>");
         }
-
         if (activity.getElevationGain() != null) {
             metrics.append("⛰️ ")
                 .append(String.format("%.0f m", activity.getElevationGain()))
-                .append("\n");
+                .append("<br>");
         }
-
         if (metrics.length() > 0) {
-            content.append("\n\n").append(metrics.toString().stripTrailing());
+            content.append("<p>").append(metrics).append("</p>");
         }
 
         return content.toString();
+    }
+
+    private static String escapeHtml(String text) {
+        if (text == null) return "";
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;");
     }
 
     /**
