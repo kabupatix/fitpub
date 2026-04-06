@@ -38,7 +38,7 @@ public class GpxParser {
 
     private static final String GPX_NS = "http://www.topografix.com/GPX/1/1";
     private static final String GPXTPX_NS = "http://www.garmin.com/xmlschemas/TrackPointExtension/v1";
-    private static final double ELEVATION_NOISE_THRESHOLD = 2.0; // Ignore elevation changes < 2m
+    private static final double ELEVATION_NOISE_THRESHOLD = 0.0; // Sum all elevation changes (barometric data is smooth enough)
     private static final double STOPPED_SPEED_THRESHOLD = 0.5; // km/h - below this is considered stopped
     private static final long STOPPED_TIME_THRESHOLD = 30; // seconds - must be stopped this long to count
 

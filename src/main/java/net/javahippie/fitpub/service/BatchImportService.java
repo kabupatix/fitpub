@@ -43,6 +43,7 @@ public class BatchImportService {
     private final BatchImportJobRepository batchImportJobRepository;
     private final BatchImportFileResultRepository batchImportFileResultRepository;
     private final ActivityFileService activityFileService;
+    private final PeakDetectionService peakDetectionService;
     private final ActivityRepository activityRepository;
     private final UserRepository userRepository;
     private final PersonalRecordService personalRecordService;
@@ -63,6 +64,7 @@ public class BatchImportService {
             HeatmapGridService heatmapGridService,
             TrainingLoadService trainingLoadService,
             ActivitySummaryService activitySummaryService,
+            PeakDetectionService peakDetectionService,
             @org.springframework.context.annotation.Lazy BatchImportService self) {
         this.batchImportJobRepository = batchImportJobRepository;
         this.batchImportFileResultRepository = batchImportFileResultRepository;
@@ -74,6 +76,7 @@ public class BatchImportService {
         this.heatmapGridService = heatmapGridService;
         this.trainingLoadService = trainingLoadService;
         this.activitySummaryService = activitySummaryService;
+        this.peakDetectionService = peakDetectionService;
         this.self = self;
     }
 
@@ -257,6 +260,13 @@ public class BatchImportService {
                     Activity.Visibility.PUBLIC,
                     ActivityFileService.ProcessingOptions.batchImportMode()
             );
+
+            // Detect peaks (now fast thanks to GIST index hit)
+            try {
+                peakDetectionService.detectPeaksForActivity(activity);
+            } catch (Exception e) {
+                log.warn("Peak detection failed for activity {}: {}", activity.getId(), e.getMessage());
+            }
 
             // Mark file as success
             fileResult.setStatus(BatchImportFileResult.FileStatus.SUCCESS);

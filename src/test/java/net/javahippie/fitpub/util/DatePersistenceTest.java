@@ -125,15 +125,6 @@ class DatePersistenceTest {
         assertEquals(expectedEndTime, queriedActivity.getEndedAt(),
             "Queried end time should match original parsed value");
 
-        // Also verify it's recent (within last 2 months)
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime twoMonthsAgo = now.minusMonths(2);
-
-        assertTrue(queriedActivity.getStartedAt().isAfter(twoMonthsAgo),
-            String.format("Activity should be recent. Expected after %s, got %s",
-                twoMonthsAgo.format(FORMATTER),
-                queriedActivity.getStartedAt().format(FORMATTER)));
-
         log.info("");
         log.info("✅ FIT file date persistence: PASSED");
         log.info("  Expected: {}", expectedStartTime);

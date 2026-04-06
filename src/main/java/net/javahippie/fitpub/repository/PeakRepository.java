@@ -13,12 +13,15 @@ public interface PeakRepository extends JpaRepository<Peak, Integer> {
 
     /**
      * Find all peaks within a given distance (meters) of an activity's simplified track.
-     * Uses ST_DWithin on geography type for accurate meter-based distance.
+     * Uses a two-stage approach:
+     * 1. ST_Expand + && for fast GIST index lookup on geometry
+     * 2. ST_DWithin on geography for precise meter-based filtering
      */
     @Query(value = """
                    SELECT p.* FROM peaks p
                    JOIN activities a ON a.id = :activityId
                    WHERE a.simplified_track IS NOT NULL
+                     AND p.geom && ST_Expand(a.simplified_track, 0.002)
                      AND ST_DWithin(CAST(p.geom AS geography), CAST(a.simplified_track AS geography), :distanceMeters)
                    ORDER BY p.name
                    """,

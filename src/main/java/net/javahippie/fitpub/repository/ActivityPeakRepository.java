@@ -29,6 +29,7 @@ public interface ActivityPeakRepository extends JpaRepository<ActivityPeak, Inte
                    JOIN peaks p ON p.id = ap.peak_id
                    JOIN activities a ON a.id = ap.activity_id
                    WHERE a.user_id = :userId
+                     AND a.visibility = 'PUBLIC'
                    GROUP BY p.id, p.name, p.wikipedia
                    ORDER BY p.name
                    """,

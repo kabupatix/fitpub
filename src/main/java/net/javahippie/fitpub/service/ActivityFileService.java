@@ -197,6 +197,42 @@ public class ActivityFileService {
     }
 
     /**
+     * Reprocess elevation for a GPX activity from its stored raw file.
+     * Only works for GPX files — FIT files use their session summary.
+     *
+     * @param activity the activity to reprocess
+     * @return true if elevation was updated
+     */
+    @Transactional
+    public boolean reprocessGpxElevation(Activity activity) {
+        if (!"GPX".equals(activity.getSourceFileFormat())) {
+            return false;
+        }
+
+        byte[] rawFile = activity.getRawActivityFile();
+        if (rawFile == null || rawFile.length == 0) {
+            log.debug("No raw file stored for activity {}, skipping", activity.getId());
+            return false;
+        }
+
+        try {
+            ParsedActivityData parsedData = gpxParser.parse(rawFile);
+
+            BigDecimal oldGain = activity.getElevationGain();
+            activity.setElevationGain(parsedData.getElevationGain());
+            activity.setElevationLoss(parsedData.getElevationLoss());
+            activityRepository.save(activity);
+
+            log.info("Reprocessed GPX elevation for activity {}: {}m -> {}m",
+                activity.getId(), oldGain, parsedData.getElevationGain());
+            return true;
+        } catch (Exception e) {
+            log.warn("Failed to reprocess elevation for activity {}: {}", activity.getId(), e.getMessage());
+            return false;
+        }
+    }
+
+    /**
      * Detects file format from content and filename.
      * Priority: magic bytes > XML header > file extension
      */

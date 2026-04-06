@@ -28,6 +28,8 @@ public class DebugController {
 
     private final UserRepository userRepository;
     private final net.javahippie.fitpub.service.PeakDetectionService peakDetectionService;
+    private final net.javahippie.fitpub.service.ActivityFileService activityFileService;
+    private final net.javahippie.fitpub.repository.ActivityRepository activityRepository;
 
     @GetMapping("/validate-keys")
     public Map<String, Object> validateKeys() {
@@ -115,6 +117,51 @@ public class DebugController {
             return org.springframework.http.ResponseEntity.ok(Map.of("status", "already running"));
         }
         peakDetectionService.backfillAllActivities();
+        return org.springframework.http.ResponseEntity.ok(Map.of("status", "started"));
+    }
+
+    private final java.util.concurrent.atomic.AtomicBoolean elevationReprocessRunning =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    @org.springframework.web.bind.annotation.PostMapping("/reprocess-gpx-elevation")
+    public org.springframework.http.ResponseEntity<Map<String, String>> reprocessGpxElevation() {
+        if (!elevationReprocessRunning.compareAndSet(false, true)) {
+            return org.springframework.http.ResponseEntity.ok(Map.of("status", "already running"));
+        }
+
+        new Thread(() -> {
+            try {
+                var ids = activityRepository.findAllIds();
+                log.info("Starting GPX elevation reprocessing for {} activities", ids.size());
+
+                int updated = 0, skipped = 0, failed = 0;
+                for (int i = 0; i < ids.size(); i++) {
+                    try {
+                        var activity = activityRepository.findById(ids.get(i)).orElse(null);
+                        if (activity == null || !"GPX".equals(activity.getSourceFileFormat())) {
+                            skipped++;
+                            continue;
+                        }
+                        if (activityFileService.reprocessGpxElevation(activity)) {
+                            updated++;
+                        } else {
+                            skipped++;
+                        }
+                    } catch (Exception e) {
+                        failed++;
+                        log.warn("Failed to reprocess elevation for {}: {}", ids.get(i), e.getMessage());
+                    }
+                    if ((i + 1) % 100 == 0) {
+                        log.info("GPX elevation reprocess progress: {} / {} (updated={}, skipped={}, failed={})",
+                            i + 1, ids.size(), updated, skipped, failed);
+                    }
+                }
+                log.info("GPX elevation reprocessing complete: updated={}, skipped={}, failed={}", updated, skipped, failed);
+            } finally {
+                elevationReprocessRunning.set(false);
+            }
+        }, "gpx-elevation-reprocess").start();
+
         return org.springframework.http.ResponseEntity.ok(Map.of("status", "started"));
     }
 }
