@@ -92,6 +92,20 @@
             </div>
 
             <!-- Public Activities -->
+            <!-- Visited Peaks -->
+            <div class="card mb-4" id="peaksSection" style="display: none;">
+                <div class="card-header">
+                    <h5 class="mb-0">
+                        <i class="bi bi-triangle"></i> Visited Peaks
+                        <span class="badge bg-secondary ms-2" id="peaksCount">0</span>
+                    </h5>
+                </div>
+                <div class="card-body p-0">
+                    <ul class="list-group list-group-flush" id="peaksList">
+                    </ul>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">
                     <h5 class="mb-0">
@@ -149,6 +163,7 @@
                         .then(user => {
                             renderProfile(user);
                             loadPublicActivities(user.id);
+                            loadPeaks();
                         })
                         .catch(error => {
                             console.error('Error loading profile:', error);
@@ -297,6 +312,35 @@
                 }
 
                 let currentPage = 0;
+
+                async function loadPeaks() {
+                    try {
+                        const response = await fetch(`/api/users/${targetUsername}/peaks`);
+                        if (response.ok) {
+                            const peaks = await response.json();
+                            if (peaks.length > 0) {
+                                document.getElementById('peaksCount').textContent = peaks.length;
+                                const list = document.getElementById('peaksList');
+                                list.innerHTML = peaks.map(peak => {
+                                    const nameHtml = peak.wikipedia
+                                        ? `<a href="${peak.wikipedia}" target="_blank" rel="noopener">${peak.name} <i class="bi bi-box-arrow-up-right small"></i></a>`
+                                        : peak.name;
+                                    const visits = peak.visitCount > 1 ? `${peak.visitCount} visits` : '1 visit';
+                                    const activityLink = peak.latestActivityId
+                                        ? ` · <a href="/activities/${peak.latestActivityId}">latest activity</a>`
+                                        : '';
+                                    return `<li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span>${nameHtml}</span>
+                                        <span class="text-muted small">${visits}${activityLink}</span>
+                                    </li>`;
+                                }).join('');
+                                document.getElementById('peaksSection').style.display = 'block';
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Error loading peaks:', error);
+                    }
+                }
 
                 async function loadPublicActivities(userId) {
                     try {

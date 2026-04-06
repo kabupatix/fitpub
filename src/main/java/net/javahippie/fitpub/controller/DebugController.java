@@ -27,6 +27,7 @@ import java.util.*;
 public class DebugController {
 
     private final UserRepository userRepository;
+    private final net.javahippie.fitpub.service.PeakDetectionService peakDetectionService;
 
     @GetMapping("/validate-keys")
     public Map<String, Object> validateKeys() {
@@ -106,5 +107,14 @@ public class DebugController {
         signature.initVerify(publicKey);
         signature.update(data);
         return signature.verify(signatureBytes);
+    }
+
+    @org.springframework.web.bind.annotation.PostMapping("/backfill-peaks")
+    public org.springframework.http.ResponseEntity<Map<String, String>> backfillPeaks() {
+        if (peakDetectionService.isBackfillRunning()) {
+            return org.springframework.http.ResponseEntity.ok(Map.of("status", "already running"));
+        }
+        peakDetectionService.backfillAllActivities();
+        return org.springframework.http.ResponseEntity.ok(Map.of("status", "started"));
     }
 }

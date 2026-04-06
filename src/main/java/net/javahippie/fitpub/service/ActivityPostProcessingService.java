@@ -33,6 +33,7 @@ public class ActivityPostProcessingService {
     private final PersonalRecordService personalRecordService;
     private final WeatherService weatherService;
     private final HeatmapGridService heatmapGridService;
+    private final PeakDetectionService peakDetectionService;
     private final FederationService federationService;
     private final ActivityImageService activityImageService;
     private final ActivityRepository activityRepository;
@@ -57,6 +58,7 @@ public class ActivityPostProcessingService {
         updatePersonalRecordsAsync(activityId);
         updateHeatmapAsync(activityId);
         fetchWeatherAsync(activityId);
+        detectPeaksAsync(activityId);
 
         log.info("Completed async post-processing for activity {}", activityId);
     }
@@ -127,6 +129,28 @@ public class ActivityPostProcessingService {
             log.error("Async: Failed to fetch weather for activity {}: {}",
                 activityId, e.getMessage(), e);
             // Don't rethrow - error logged, operation fails independently
+        }
+    }
+
+    /**
+     * Detect peaks along the activity's route.
+     *
+     * @param activityId the activity ID to process
+     */
+    void detectPeaksAsync(UUID activityId) {
+        try {
+            log.debug("Async: Detecting peaks for activity {}", activityId);
+
+            Activity activity = activityRepository.findById(activityId)
+                .orElseThrow(() -> new EntityNotFoundException("Activity not found: " + activityId));
+
+            peakDetectionService.detectPeaksForActivity(activity);
+
+            log.info("Async: Peak detection completed for activity {}", activityId);
+
+        } catch (Exception e) {
+            log.error("Async: Failed to detect peaks for activity {}: {}",
+                activityId, e.getMessage(), e);
         }
     }
 

@@ -55,9 +55,19 @@ public class ActivityController {
     private final WeatherService weatherService;
     private final PrivacyZoneService privacyZoneService;
     private final TrackPrivacyFilter trackPrivacyFilter;
+    private final net.javahippie.fitpub.repository.ActivityPeakRepository activityPeakRepository;
 
     @Value("${fitpub.base-url}")
     private String baseUrl;
+
+    private void populatePeaks(net.javahippie.fitpub.model.dto.ActivityDTO dto, UUID activityId) {
+        var activityPeaks = activityPeakRepository.findByActivityId(activityId);
+        if (!activityPeaks.isEmpty()) {
+            dto.setPeaks(activityPeaks.stream()
+                .map(ap -> net.javahippie.fitpub.model.dto.PeakDTO.fromEntity(ap.getPeak()))
+                .toList());
+        }
+    }
 
     /**
      * Helper method to get user ID from authenticated UserDetails.
@@ -176,6 +186,7 @@ public class ActivityController {
         if (activity.getVisibility() == Activity.Visibility.PUBLIC) {
             // Public activities are always accessible, but apply privacy filtering
             ActivityDTO dto = ActivityDTO.fromEntityWithFiltering(activity, requestingUserId, privacyZones, trackPrivacyFilter);
+            populatePeaks(dto, id);
             log.debug("Activity {} - DTO privacy zones: {}", id,
                       dto.getPrivacyZones() != null ? dto.getPrivacyZones().size() : 0);
             return ResponseEntity.ok(dto);
@@ -196,6 +207,7 @@ public class ActivityController {
 
         // Apply privacy filtering (owner sees full track, others see filtered)
         ActivityDTO dto = ActivityDTO.fromEntityWithFiltering(checkedActivity, requestingUserId, privacyZones, trackPrivacyFilter);
+        populatePeaks(dto, id);
         return ResponseEntity.ok(dto);
     }
 
@@ -489,6 +501,15 @@ public class ActivityController {
     public ResponseEntity<org.springframework.core.io.Resource> getActivityImage(@PathVariable UUID id) {
         try {
             java.io.File imageFile = activityImageService.getActivityImageFile(id);
+
+            // Regenerate if missing (e.g. after container restart or temp dir cleanup)
+            if (!imageFile.exists()) {
+                Activity activity = fitFileService.getActivityById(id);
+                if (activity == null) {
+                    return ResponseEntity.notFound().build();
+                }
+                activityImageService.generateActivityImage(activity);
+            }
 
             if (!imageFile.exists()) {
                 return ResponseEntity.notFound().build();

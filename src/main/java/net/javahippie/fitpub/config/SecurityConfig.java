@@ -150,6 +150,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/users/*/followers").permitAll() // User followers list
                 .requestMatchers(HttpMethod.GET, "/api/users/*/following").permitAll() // User following list
                 .requestMatchers(HttpMethod.GET, "/api/users/*/follow-status").permitAll() // Follow status check
+                .requestMatchers(HttpMethod.GET, "/api/users/*/peaks").permitAll() // User's visited peaks
                 .requestMatchers(HttpMethod.POST, "/api/users/*/follow").authenticated() // Follow user
                 .requestMatchers(HttpMethod.DELETE, "/api/users/*/follow").authenticated() // Unfollow user
 

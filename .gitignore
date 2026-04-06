@@ -48,3 +48,4 @@ uploads/
 logs/
 /gadm_410.gpkg
 /.postgresdata/
+/peaks_worldwide.geojson

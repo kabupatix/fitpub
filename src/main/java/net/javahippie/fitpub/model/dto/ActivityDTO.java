@@ -66,6 +66,9 @@ public class ActivityDTO {
     private Long commentsCount;
     private Boolean likedByCurrentUser; // True if current user has liked this activity
 
+    // Peaks visited on this activity
+    private List<PeakDTO> peaks;
+
     // Privacy zones (only for activity owner, to show what's hidden for others)
     private List<PrivacyZonePreview> privacyZones;
 

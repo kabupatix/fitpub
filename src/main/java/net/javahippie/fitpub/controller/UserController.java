@@ -47,6 +47,7 @@ public class UserController {
     private final WebFingerClient webFingerClient;
     private final FederationService federationService;
     private final UserService userService;
+    private final net.javahippie.fitpub.repository.ActivityPeakRepository activityPeakRepository;
 
     @Value("${fitpub.base-url}")
     private String baseUrl;
@@ -615,5 +616,32 @@ public class UserController {
         boolean isFollowing = follow.isPresent() && follow.get().getStatus() == Follow.FollowStatus.ACCEPTED;
 
         return ResponseEntity.ok(Map.of("isFollowing", isFollowing));
+    }
+
+    /**
+     * Get peaks visited by a user with visit counts and latest activity.
+     */
+    @GetMapping("/{username}/peaks")
+    public ResponseEntity<java.util.List<Map<String, Object>>> getUserPeaks(
+        @PathVariable String username
+    ) {
+        User user = userRepository.findByUsername(username).orElse(null);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var projections = activityPeakRepository.findPeaksVisitedByUser(user.getId());
+        var result = projections.stream()
+            .map(p -> {
+                Map<String, Object> map = new java.util.LinkedHashMap<>();
+                map.put("name", p.getPeakName());
+                map.put("wikipedia", p.getWikipedia());
+                map.put("visitCount", p.getVisitCount());
+                map.put("latestActivityId", p.getLatestActivityId());
+                return map;
+            })
+            .toList();
+
+        return ResponseEntity.ok(result);
     }
 }

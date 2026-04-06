@@ -379,6 +379,7 @@ class FitFileServiceTest {
             "New Title",
             "New Description",
             Activity.Visibility.PUBLIC,
+            null,
             false
         );
 
@@ -423,6 +424,7 @@ class FitFileServiceTest {
                 "New Title",
                 "New Description",
                 Activity.Visibility.PUBLIC,
+                null,
                 false
             )
         );
@@ -453,6 +455,7 @@ class FitFileServiceTest {
                 "Hacked Title",
                 "Hacked Description",
                 Activity.Visibility.PUBLIC,
+                null,
                 false
             )
         );
@@ -496,6 +499,7 @@ class FitFileServiceTest {
             "Updated Title",
             "Updated Description",
             Activity.Visibility.PUBLIC,
+            null,
             false
         );
 
