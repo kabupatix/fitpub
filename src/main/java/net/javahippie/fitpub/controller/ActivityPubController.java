@@ -265,6 +265,21 @@ public class ActivityPubController {
         noteObject.put("to", List.of("https://www.w3.org/ns/activitystreams#Public"));
         noteObject.put("cc", List.of(actorUri + "/followers"));
 
+        // Extract hashtags from user text and add as tags
+        List<String> hashtags = extractHashtags(activity);
+        if (!hashtags.isEmpty()) {
+            List<Map<String, String>> tags = hashtags.stream()
+                .map(ht -> {
+                    Map<String, String> tag = new HashMap<>();
+                    tag.put("type", "Hashtag");
+                    tag.put("href", baseUrl + "/tags/" + ht.toLowerCase());
+                    tag.put("name", "#" + ht);
+                    return tag;
+                })
+                .toList();
+            noteObject.put("tag", tags);
+        }
+
         // Add conversation/context for threading
         noteObject.put("conversation", activityUri);
 
@@ -297,22 +312,18 @@ public class ActivityPubController {
     private String formatActivityContent(Activity activity) {
         StringBuilder content = new StringBuilder();
 
-        // Title
         if (activity.getTitle() != null && !activity.getTitle().isEmpty()) {
-            content.append("<p><strong>").append(escapeHtml(activity.getTitle())).append("</strong></p>");
+            content.append("<p><strong>").append(linkifyHashtags(escapeHtml(activity.getTitle()))).append("</strong></p>");
         }
 
-        // Description
         if (activity.getDescription() != null && !activity.getDescription().isEmpty()) {
-            content.append("<p>").append(escapeHtml(activity.getDescription())).append("</p>");
+            content.append("<p>").append(linkifyHashtags(escapeHtml(activity.getDescription()))).append("</p>");
         }
 
-        // Activity type with emoji
         String activityEmoji = getActivityEmoji(activity.getActivityType());
         String formattedType = ActivityFormatter.formatActivityType(activity.getActivityType());
         content.append("<p>").append(activityEmoji).append(" ").append(escapeHtml(formattedType)).append("</p>");
 
-        // Metrics
         StringBuilder metrics = new StringBuilder();
         if (activity.getTotalDistance() != null) {
             metrics.append("📏 ")
@@ -341,6 +352,33 @@ public class ActivityPubController {
         return content.toString();
     }
 
+    private static final java.util.regex.Pattern HASHTAG_PATTERN =
+        java.util.regex.Pattern.compile("(?<=^|\\s)#(\\w+)", java.util.regex.Pattern.UNICODE_CHARACTER_CLASS);
+
+    private List<String> extractHashtags(Activity activity) {
+        List<String> hashtags = new java.util.ArrayList<>();
+        for (String text : List.of(
+                activity.getTitle() != null ? activity.getTitle() : "",
+                activity.getDescription() != null ? activity.getDescription() : "")) {
+            var matcher = HASHTAG_PATTERN.matcher(text);
+            while (matcher.find()) {
+                String tag = matcher.group(1);
+                if (hashtags.stream().noneMatch(t -> t.equalsIgnoreCase(tag))) {
+                    hashtags.add(tag);
+                }
+            }
+        }
+        return hashtags;
+    }
+
+    private String linkifyHashtags(String escapedHtml) {
+        return HASHTAG_PATTERN.matcher(escapedHtml).replaceAll(match -> {
+            String tag = match.group(1);
+            return "<a href=\"" + baseUrl + "/tags/" + tag.toLowerCase()
+                + "\" class=\"mention hashtag\" rel=\"tag\">#<span>" + tag + "</span></a>";
+        });
+    }
+
     private static String escapeHtml(String text) {
         if (text == null) return "";
         return text.replace("&", "&amp;")
@@ -349,9 +387,6 @@ public class ActivityPubController {
                    .replace("\"", "&quot;");
     }
 
-    /**
-     * Get emoji for activity type.
-     */
     private String getActivityEmoji(Activity.ActivityType activityType) {
         return switch (activityType) {
             case RUN -> "🏃";

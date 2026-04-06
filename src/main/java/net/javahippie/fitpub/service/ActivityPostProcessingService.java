@@ -179,6 +179,21 @@ public class ActivityPostProcessingService {
             noteObject.put("content", formatActivityContent(activity));
             noteObject.put("url", baseUrl + "/activities/" + activity.getId());
 
+            // Extract hashtags from user text and add as tags
+            List<String> hashtags = extractHashtags(activity);
+            if (!hashtags.isEmpty()) {
+                List<Map<String, String>> tags = hashtags.stream()
+                    .map(ht -> {
+                        Map<String, String> tag = new HashMap<>();
+                        tag.put("type", "Hashtag");
+                        tag.put("href", baseUrl + "/tags/" + ht.toLowerCase());
+                        tag.put("name", "#" + ht);
+                        return tag;
+                    })
+                    .toList();
+                noteObject.put("tag", tags);
+            }
+
             // Set visibility (to/cc fields)
             if (activity.getVisibility() == Activity.Visibility.PUBLIC) {
                 noteObject.put("to", List.of("https://www.w3.org/ns/activitystreams#Public"));
@@ -218,19 +233,17 @@ public class ActivityPostProcessingService {
     /**
      * Format activity content as HTML for ActivityPub Note.
      * Mastodon and most Fediverse software expect HTML in the content field.
-     *
-     * @param activity the activity to format
-     * @return formatted HTML content string
+     * Hashtags in user text are converted to proper HTML links.
      */
     private String formatActivityContent(Activity activity) {
         StringBuilder content = new StringBuilder();
 
         if (activity.getTitle() != null && !activity.getTitle().isEmpty()) {
-            content.append("<p><strong>").append(escapeHtml(activity.getTitle())).append("</strong></p>");
+            content.append("<p><strong>").append(linkifyHashtags(escapeHtml(activity.getTitle()))).append("</strong></p>");
         }
 
         if (activity.getDescription() != null && !activity.getDescription().isEmpty()) {
-            content.append("<p>").append(escapeHtml(activity.getDescription())).append("</p>");
+            content.append("<p>").append(linkifyHashtags(escapeHtml(activity.getDescription()))).append("</p>");
         }
 
         String activityEmoji = getActivityEmoji(activity.getActivityType());
@@ -263,6 +276,39 @@ public class ActivityPostProcessingService {
         }
 
         return content.toString();
+    }
+
+    private static final java.util.regex.Pattern HASHTAG_PATTERN =
+        java.util.regex.Pattern.compile("(?<=^|\\s)#(\\w+)", java.util.regex.Pattern.UNICODE_CHARACTER_CLASS);
+
+    /**
+     * Extract all hashtags from user-provided title and description.
+     */
+    private List<String> extractHashtags(Activity activity) {
+        List<String> hashtags = new java.util.ArrayList<>();
+        for (String text : List.of(
+                activity.getTitle() != null ? activity.getTitle() : "",
+                activity.getDescription() != null ? activity.getDescription() : "")) {
+            var matcher = HASHTAG_PATTERN.matcher(text);
+            while (matcher.find()) {
+                String tag = matcher.group(1);
+                if (hashtags.stream().noneMatch(t -> t.equalsIgnoreCase(tag))) {
+                    hashtags.add(tag);
+                }
+            }
+        }
+        return hashtags;
+    }
+
+    /**
+     * Convert #hashtag occurrences in already-escaped HTML text to ActivityPub hashtag links.
+     */
+    private String linkifyHashtags(String escapedHtml) {
+        return HASHTAG_PATTERN.matcher(escapedHtml).replaceAll(match -> {
+            String tag = match.group(1);
+            return "<a href=\"" + baseUrl + "/tags/" + tag.toLowerCase()
+                + "\" class=\"mention hashtag\" rel=\"tag\">#<span>" + tag + "</span></a>";
+        });
     }
 
     private static String escapeHtml(String text) {
