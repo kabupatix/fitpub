@@ -100,7 +100,7 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.GET, "/api/activities/user/*").permitAll()
 
                 // Debug endpoints (dev only)
-                .requestMatchers("/api/debug/**").permitAll()
+                .requestMatchers("/api/debug/**").denyAll()
 
                 // Public endpoints - Likes and Comments (GET only)
                 .requestMatchers(HttpMethod.GET, "/api/activities/*/likes").permitAll()
