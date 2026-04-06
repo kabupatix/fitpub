@@ -3,26 +3,17 @@ package net.javahippie.fitpub.config;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
-import org.testcontainers.containers.BindMode;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.startupcheck.IsRunningStartupCheckStrategy;
-import org.testcontainers.containers.startupcheck.StartupCheckStrategy;
 import org.testcontainers.containers.wait.strategy.HostPortWaitStrategy;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * Testcontainers configuration for tests.
- * Automatically starts a PostgreSQL container with PostGIS extension for integration tests.
+ * Testcontainers configuration for tests and dev mode (via spring-boot:test-run).
+ * Automatically starts a PostgreSQL container with PostGIS extension.
  */
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
-    /**
-     * PostgreSQL container with PostGIS extension for tests.
-     * PostGIS image is treated as a standard PostgreSQL container.
-     *
-     * @ServiceConnection automatically configures the datasource from this container.
-     */
     @Bean
     @ServiceConnection
     public PostgreSQLContainer<?> postgresContainer() {
@@ -34,7 +25,6 @@ public class TestcontainersConfiguration {
                 .withUsername("test")
                 .withPassword("test")
                 .waitingFor(new HostPortWaitStrategy())
-                .withReuse(true)
-                .withFileSystemBind(".postgresdata", "/var/lib/postgresql/data", BindMode.READ_WRITE);
+                .withReuse(true);
     }
 }

@@ -11,8 +11,6 @@ import net.javahippie.fitpub.util.ActivityFormatter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -21,16 +19,11 @@ import java.util.UUID;
 
 /**
  * Service for asynchronous post-processing of activities after upload.
- * Coordinates expensive operations (Personal Records, Weather, Heatmap, Federation)
- * in separate transactions to avoid blocking the upload response.
+ * Coordinates expensive operations (Personal Records, Weather, Heatmap)
+ * to avoid blocking the upload response.
  *
- * Each operation runs asynchronously with REQUIRES_NEW transaction propagation
- * to ensure fault isolation - failures in one operation don't affect others.
- *
- * Operations execute in the following order:
- * - Personal Records: Runs independently (parallel)
- * - Heatmap: Runs independently (parallel)
- * - Weather → Federation: Sequential chain (weather must complete before federation)
+ * Federation is NOT triggered here — it is deferred until the user
+ * finalizes the activity via the metadata update (PUT) endpoint.
  */
 @Service
 @RequiredArgsConstructor
@@ -52,10 +45,6 @@ public class ActivityPostProcessingService {
      * Orchestrates async post-processing operations for an uploaded activity.
      * Called after activity is saved and immediately visible to the user.
      *
-     * Personal Records and Heatmap run independently in parallel.
-     * Weather and Federation run sequentially (weather must complete first for future share pic integration).
-     *
-     * All operations use separate transactions (REQUIRES_NEW) for fault isolation.
      * Errors are logged but don't propagate - each operation fails independently.
      *
      * @param activityId the saved activity ID
@@ -65,28 +54,18 @@ public class ActivityPostProcessingService {
     public void processActivityAsync(UUID activityId, UUID userId) {
         log.info("Starting async post-processing for activity {} by user {}", activityId, userId);
 
-        // Run post-processing operations in background thread
-        // All operations run sequentially with separate transactions (REQUIRES_NEW)
-        // for fault isolation - failures in one operation don't affect others
-
         updatePersonalRecordsAsync(activityId);
         updateHeatmapAsync(activityId);
-
-        // Weather must complete before federation for potential weather data in share images
         fetchWeatherAsync(activityId);
-        publishToFederationAsync(activityId, userId);
 
         log.info("Completed async post-processing for activity {}", activityId);
     }
 
     /**
      * Check and update personal records for the activity.
-     * Called internally from processActivityAsync background thread.
-     * Runs in a separate transaction to isolate from main upload transaction.
      *
      * @param activityId the activity ID to process
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     void updatePersonalRecordsAsync(UUID activityId) {
         try {
             log.debug("Async: Checking personal records for activity {}", activityId);
@@ -107,12 +86,9 @@ public class ActivityPostProcessingService {
 
     /**
      * Update heatmap grid with activity GPS data.
-     * Called internally from processActivityAsync background thread.
-     * Runs in a separate transaction to isolate from main upload transaction.
      *
      * @param activityId the activity ID to process
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     void updateHeatmapAsync(UUID activityId) {
         try {
             log.debug("Async: Updating heatmap for activity {}", activityId);
@@ -133,14 +109,9 @@ public class ActivityPostProcessingService {
 
     /**
      * Fetch weather data for the activity location and time.
-     * Called internally from processActivityAsync background thread.
-     * Runs in a separate transaction to isolate from main upload transaction.
-     *
-     * Must complete before federation push to allow future integration of weather in share images.
      *
      * @param activityId the activity ID to process
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     void fetchWeatherAsync(UUID activityId) {
         try {
             log.debug("Async: Fetching weather for activity {}", activityId);
@@ -162,17 +133,15 @@ public class ActivityPostProcessingService {
     /**
      * Publish activity to the Fediverse (ActivityPub federation).
      * Generates activity image and sends Create activity to all follower inboxes.
-     * Called internally from processActivityAsync background thread.
-     * Runs in a separate transaction to isolate from main upload transaction.
      *
      * Only publishes if activity visibility is PUBLIC or FOLLOWERS.
-     * This method should run AFTER weather fetch completes for future share pic integration.
+     * Called from the controller when the user finalizes activity metadata.
      *
      * @param activityId the activity ID to publish
      * @param userId the user ID who owns the activity
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    void publishToFederationAsync(UUID activityId, UUID userId) {
+    @Async("taskExecutor")
+    public void publishToFederationAsync(UUID activityId, UUID userId) {
         try {
             log.debug("Async: Publishing activity {} to Fediverse", activityId);
 

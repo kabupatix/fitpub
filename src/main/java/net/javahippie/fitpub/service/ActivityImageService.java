@@ -83,13 +83,12 @@ public class ActivityImageService {
                     g2d.drawImage(mapTiles, 0, 0, null);
 
                     // 80s Aerobic style gradient background for metadata area (right 40%)
-                    int metadataX = trackWidth;
                     GradientPaint gradient = new GradientPaint(
-                            metadataX, 0, new Color(26, 0, 51),  // Dark purple
+                            trackWidth, 0, new Color(26, 0, 51),  // Dark purple
                             width, height, new Color(45, 0, 82)   // Lighter purple
                     );
                     g2d.setPaint(gradient);
-                    g2d.fillRect(metadataX, 0, width - metadataX, height);
+                    g2d.fillRect(trackWidth, 0, width - trackWidth, height);
 
                     log.debug("Rendered OSM tiles for activity {}", activity.getId());
                 } catch (Exception e) {

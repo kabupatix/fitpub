@@ -16,7 +16,10 @@ public class FitFileAnalyzer {
     private static final double SEMICIRCLES_TO_DEGREES = 180.0 / Math.pow(2, 31);
     private static final long FIT_EPOCH_OFFSET = 631065600L;
 
-    public static void main(String[] args) {
+    /**
+     * Run from IDE or via {@code analyzeFitFile(path)} directly.
+     */
+    public static void analyze(String[] args) {
         if (args.length == 0) {
             System.out.println("Usage: FitFileAnalyzer <path-to-fit-file>");
             System.exit(1);

@@ -120,13 +120,8 @@ public class ActivityController {
         // - Personal Records checking
         // - Weather data fetching
         // - Heatmap grid updates
-        // - Federation push (includes image generation)
         //
-        // Operations run in separate transactions with proper ordering:
-        // - Personal Records and Heatmap run in parallel
-        // - Weather → Federation run sequentially (weather must complete before federation)
-        //
-        // Activity is immediately visible to user, processing continues in background
+        // Federation is deferred until the user finalizes via PUT (metadata update)
         activityPostProcessingService.processActivityAsync(activity.getId(), user.getId());
 
         log.info("Activity {} created and queued for async post-processing", activity.getId());
@@ -269,8 +264,14 @@ public class ActivityController {
                 request.getTitle(),
                 request.getDescription(),
                 request.getVisibility(),
+                request.getActivityType(),
                 request.getRace()
             );
+
+            // Trigger federation on publish if visibility allows it
+            if (updated.getVisibility() != Activity.Visibility.PRIVATE) {
+                activityPostProcessingService.publishToFederationAsync(updated.getId(), userId);
+            }
 
             ActivityDTO dto = ActivityDTO.fromEntity(updated);
             return ResponseEntity.ok(dto);
@@ -302,9 +303,10 @@ public class ActivityController {
             return ResponseEntity.notFound().build();
         }
 
-        // Only send Delete activity if it was previously federated (public or followers-only)
-        boolean shouldFederate = activity.getVisibility() == Activity.Visibility.PUBLIC ||
-                                activity.getVisibility() == Activity.Visibility.FOLLOWERS;
+        // Only send Delete activity if it was previously published and federated
+        boolean shouldFederate = Boolean.TRUE.equals(activity.getPublished()) &&
+                                (activity.getVisibility() == Activity.Visibility.PUBLIC ||
+                                 activity.getVisibility() == Activity.Visibility.FOLLOWERS);
 
         // Delete from database
         boolean deleted = fitFileService.deleteActivity(id, userId);

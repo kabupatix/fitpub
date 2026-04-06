@@ -148,6 +148,15 @@ public class Activity {
     @Builder.Default
     private Boolean race = false;
 
+    /**
+     * Whether this activity has been published (finalized by the user).
+     * New activities default to unpublished. Federation and public visibility
+     * are deferred until the user saves the activity details (title, description, visibility).
+     */
+    @Column(name = "published", nullable = false)
+    @Builder.Default
+    private Boolean published = false;
+
     @OneToOne(mappedBy = "activity", cascade = CascadeType.ALL, orphanRemoval = true)
     private ActivityMetrics metrics;
 

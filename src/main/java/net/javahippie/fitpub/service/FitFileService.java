@@ -436,7 +436,7 @@ public class FitFileService {
      * @throws IllegalArgumentException if activity doesn't exist or user doesn't own it
      */
     @Transactional
-    public Activity updateActivity(UUID activityId, UUID userId, String title, String description, Activity.Visibility visibility, Boolean race) {
+    public Activity updateActivity(UUID activityId, UUID userId, String title, String description, Activity.Visibility visibility, Activity.ActivityType activityType, Boolean race) {
         // Fetch the existing activity within the transaction
         Activity existing = activityRepository.findByIdAndUserId(activityId, userId)
                 .orElseThrow(() -> new IllegalArgumentException("Activity not found or user does not own it: " + activityId));
@@ -445,7 +445,11 @@ public class FitFileService {
         existing.setTitle(title);
         existing.setDescription(description);
         existing.setVisibility(visibility);
+        if (activityType != null) {
+            existing.setActivityType(activityType);
+        }
         existing.setRace(race != null ? race : false);
+        existing.setPublished(true);
 
         // Save will UPDATE because the entity is already managed by the persistence context
         return activityRepository.save(existing);

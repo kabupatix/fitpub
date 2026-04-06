@@ -27,5 +27,7 @@ public class ActivityUpdateRequest {
     @NotNull(message = "Visibility is required")
     private Activity.Visibility visibility;
 
+    private Activity.ActivityType activityType;
+
     private Boolean race; // Race/competition flag
 }

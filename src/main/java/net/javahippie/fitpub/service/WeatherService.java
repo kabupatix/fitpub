@@ -74,13 +74,6 @@ public class WeatherService {
         log.debug("Weather API key present: length={} chars, first 4 chars={}...",
                 apiKey.length(), apiKey.length() > 4 ? apiKey.substring(0, 4) : "???");
 
-        // Check if weather data already exists
-        if (weatherDataRepository.existsByActivityId(activity.getId())) {
-            log.info("Weather data already exists for activity {}, returning cached data", activity.getId());
-            return weatherDataRepository.findByActivityId(activity.getId());
-        }
-
-        // Extract start location from track
         if (activity.getTrackPointsJson() == null || activity.getTrackPointsJson().isEmpty()) {
             log.warn("No track points available for activity {} - cannot fetch weather", activity.getId());
             return Optional.empty();

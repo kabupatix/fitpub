@@ -252,7 +252,7 @@ public class ActivityFileService {
             : ActivityFormatter.generateActivityTitle(parsedData.getStartTime(), parsedData.getActivityType());
 
         // Default to PUBLIC if visibility not specified
-        Activity.Visibility activityVisibility = visibility != null ? visibility : Activity.Visibility.PUBLIC;
+        Activity.Visibility activityVisibility = visibility != null ? visibility : Activity.Visibility.PRIVATE;
 
         // Create activity entity
         Activity activity = Activity.builder()
@@ -301,10 +301,9 @@ public class ActivityFileService {
             activity.setMetrics(metrics);
         }
 
-        var res = activity.findFirstTrackpoint()
-                .map(tp -> reverseGeolocationRepository.findForLocation(tp.lon(), tp.lat()));
-
-        res.ifPresent(reverseGeolocation -> activity.setActivityLocation(reverseGeolocation.formatWithHighestResolution()));
+        activity.findFirstTrackpoint()
+                .map(tp -> reverseGeolocationRepository.findForLocation(tp.lon(), tp.lat()))
+                .ifPresent(reverseGeolocation -> activity.setActivityLocation(reverseGeolocation.formatWithHighestResolution()));
 
         // Save activity (single INSERT instead of 855!)
         Activity savedActivity = activityRepository.save(activity);

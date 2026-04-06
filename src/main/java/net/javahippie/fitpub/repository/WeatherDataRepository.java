@@ -22,14 +22,6 @@ public interface WeatherDataRepository extends JpaRepository<WeatherData, UUID> 
     Optional<WeatherData> findByActivityId(UUID activityId);
 
     /**
-     * Check if weather data exists for an activity.
-     *
-     * @param activityId the activity ID
-     * @return true if weather data exists
-     */
-    boolean existsByActivityId(UUID activityId);
-
-    /**
      * Delete weather data for an activity.
      *
      * @param activityId the activity ID

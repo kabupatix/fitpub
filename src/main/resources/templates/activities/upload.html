@@ -17,13 +17,6 @@
                     Upload Activity
                 </h2>
 
-                <!-- Success Alert -->
-                <div id="successAlert" class="alert alert-success d-none" role="alert">
-                    <i class="bi bi-check-circle-fill"></i>
-                    <span id="successMessage">Activity uploaded successfully!</span>
-                    <a href="#" id="viewActivityLink" class="alert-link">View activity</a>
-                </div>
-
                 <!-- Error Alert -->
                 <div id="errorAlert" class="alert alert-danger d-none" role="alert">
                     <i class="bi bi-exclamation-triangle-fill"></i>
@@ -36,9 +29,6 @@
                         <form id="uploadForm" enctype="multipart/form-data">
                             <!-- File Upload Area -->
                             <div class="mb-4">
-                                <label class="form-label fw-bold">
-                                    Activity File <span class="text-danger">*</span>
-                                </label>
                                 <div class="file-upload-area" id="fileUploadArea">
                                     <input type="file"
                                            id="fitFile"
@@ -99,6 +89,33 @@
                                     </div>
                                 </div>
 
+                                <!-- Activity Type -->
+                                <div class="mb-3">
+                                    <label for="activityType" class="form-label">
+                                        Activity Type <span class="text-danger">*</span>
+                                    </label>
+                                    <select class="form-select" id="activityType" name="activityType" required>
+                                        <option value="RUN">Run</option>
+                                        <option value="RIDE">Ride</option>
+                                        <option value="HIKE">Hike</option>
+                                        <option value="WALK">Walk</option>
+                                        <option value="SWIM">Swim</option>
+                                        <option value="ALPINE_SKI">Alpine Ski</option>
+                                        <option value="BACKCOUNTRY_SKI">Backcountry Ski</option>
+                                        <option value="NORDIC_SKI">Nordic Ski</option>
+                                        <option value="SNOWBOARD">Snowboard</option>
+                                        <option value="ROWING">Rowing</option>
+                                        <option value="KAYAKING">Kayaking</option>
+                                        <option value="CANOEING">Canoeing</option>
+                                        <option value="INLINE_SKATING">Inline Skating</option>
+                                        <option value="ROCK_CLIMBING">Rock Climbing</option>
+                                        <option value="MOUNTAINEERING">Mountaineering</option>
+                                        <option value="YOGA">Yoga</option>
+                                        <option value="WORKOUT">Workout</option>
+                                        <option value="OTHER">Other</option>
+                                    </select>
+                                </div>
+
                                 <!-- Description -->
                                 <div class="mb-3">
                                     <label for="description" class="form-label">
@@ -121,9 +138,9 @@
                                         Visibility <span class="text-danger">*</span>
                                     </label>
                                     <select class="form-select" id="visibility" name="visibility">
-                                        <option value="PUBLIC" selected>Public - Anyone can see</option>
+                                        <option value="PUBLIC">Public - Anyone can see</option>
                                         <option value="FOLLOWERS">Followers Only - Only your followers can see</option>
-                                        <option value="PRIVATE">Private - Only you can see</option>
+                                        <option value="PRIVATE" selected>Private - Only you can see</option>
                                     </select>
                                     <div class="form-text">
                                         <i class="bi bi-info-circle"></i>
@@ -194,6 +211,7 @@
         <script th:inline="javascript">
             document.addEventListener('DOMContentLoaded', function() {
                 const form = document.getElementById('uploadForm');
+                const fileUploadArea = document.getElementById('fileUploadArea');
                 const fitFileInput = document.getElementById('fitFile');
                 const fileLabel = document.getElementById('fileLabel');
                 const uploadBtn = document.getElementById('uploadBtn');
@@ -201,7 +219,6 @@
                 const uploadBtnSpinner = document.getElementById('uploadBtnSpinner');
                 const cancelBtn = document.getElementById('cancelBtn');
                 const errorAlert = document.getElementById('errorAlert');
-                const successAlert = document.getElementById('successAlert');
                 const errorMessage = document.getElementById('errorMessage');
                 const progressContainer = document.getElementById('progressContainer');
                 const progressBar = document.getElementById('progressBar');
@@ -270,7 +287,6 @@
 
                     // Hide alerts
                     errorAlert.classList.add('d-none');
-                    successAlert.classList.add('d-none');
 
                     // Show progress
                     progressContainer.classList.remove('d-none');
@@ -309,9 +325,9 @@
                                     progressBar.classList.remove('progress-bar-animated');
                                     progressBar.classList.add('bg-success');
 
-                                    // Show success message
-                                    successAlert.classList.remove('d-none');
-                                    document.getElementById('viewActivityLink').href = '/activities/' + uploadedActivityId;
+                                    // Hide upload form
+                                    fileUploadArea.classList.add('d-none');
+                                    progressContainer.classList.add('d-none');
 
                                     // Show metadata section if not already shown
                                     if (metadataSection.classList.contains('d-none')) {
@@ -333,8 +349,15 @@
                                             <p class="mb-0"><strong>Date:</strong> ${formattedDateTime}</p>
                                         `;
 
-                                        // Pre-fill title with activity type and date
-                                        document.getElementById('title').value = `${response.activityType || 'Activity'} - ${formattedDate}`;
+                                        // Use server-generated title (e.g. "Evening Run")
+                                        document.getElementById('title').value = response.title || `${response.activityType || 'Activity'} - ${formattedDate}`;
+
+                                        // Pre-select activity type dropdown
+                                        const activityTypeRaw = (response.activityType || '').toUpperCase().replace(/ /g, '_');
+                                        const activityTypeSelect = document.getElementById('activityType');
+                                        if (activityTypeSelect.querySelector(`option[value="${activityTypeRaw}"]`)) {
+                                            activityTypeSelect.value = activityTypeRaw;
+                                        }
                                     }
 
                                     // Reset form state
@@ -425,13 +448,13 @@
 
                     // Hide alerts
                     errorAlert.classList.add('d-none');
-                    successAlert.classList.add('d-none');
 
                     try {
                         const updateData = {
                             title: document.getElementById('title').value,
                             description: document.getElementById('description').value,
                             visibility: document.getElementById('visibility').value,
+                            activityType: document.getElementById('activityType').value,
                             race: document.getElementById('race').checked
                         };
 

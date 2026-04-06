@@ -123,7 +123,6 @@ class WeatherServiceTest {
             """;
         testActivity.setTrackPointsJson(trackPointsJson);
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenReturn(SAMPLE_WEATHER_RESPONSE);
         when(weatherDataRepository.save(any(WeatherData.class)))
@@ -163,7 +162,6 @@ class WeatherServiceTest {
             """;
         testActivity.setTrackPointsJson(trackPointsJson);
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenReturn(SAMPLE_WEATHER_RESPONSE);
         when(weatherDataRepository.save(any(WeatherData.class)))
@@ -209,26 +207,6 @@ class WeatherServiceTest {
         assertTrue(result.isEmpty());
         verify(weatherDataRepository, never()).save(any(WeatherData.class));
         verify(restTemplate, never()).getForObject(any(URI.class), eq(String.class));
-    }
-
-    @Test
-    @DisplayName("Should return cached weather if it already exists")
-    void testFetchWeather_Cached() {
-        testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
-
-        WeatherData cachedWeather = new WeatherData();
-        cachedWeather.setActivityId(activityId);
-        cachedWeather.setTemperatureCelsius(new BigDecimal("20.0"));
-
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(true);
-        when(weatherDataRepository.findByActivityId(activityId)).thenReturn(Optional.of(cachedWeather));
-
-        Optional<WeatherData> result = weatherService.fetchWeatherForActivity(testActivity);
-
-        assertTrue(result.isPresent());
-        assertEquals(new BigDecimal("20.0"), result.get().getTemperatureCelsius());
-        verify(restTemplate, never()).getForObject(any(URI.class), eq(String.class));
-        verify(weatherDataRepository, never()).save(any(WeatherData.class));
     }
 
     @Test
@@ -291,8 +269,6 @@ class WeatherServiceTest {
         testActivity.setStartedAt(LocalDateTime.now().minusDays(10)); // Old activity
         testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
-
         Optional<WeatherData> result = weatherService.fetchWeatherForActivity(testActivity);
 
         assertTrue(result.isEmpty());
@@ -305,7 +281,6 @@ class WeatherServiceTest {
     void testFetchWeather_AuthenticationError() {
         testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenThrow(new HttpClientErrorException(
                 org.springframework.http.HttpStatus.UNAUTHORIZED,
@@ -325,7 +300,6 @@ class WeatherServiceTest {
     void testFetchWeather_NetworkError() {
         testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenThrow(new ResourceAccessException("Connection timeout"));
 
@@ -340,7 +314,6 @@ class WeatherServiceTest {
     void testFetchWeather_MalformedResponse() {
         testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenReturn("this is not valid JSON");
 
@@ -372,7 +345,6 @@ class WeatherServiceTest {
 
         testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenReturn(responseWithRain);
         when(weatherDataRepository.save(any(WeatherData.class)))
@@ -414,7 +386,6 @@ class WeatherServiceTest {
 
         testActivity.setTrackPointsJson("[{\"latitude\":50.0,\"longitude\":8.0}]");
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenReturn(minimalResponse);
         when(weatherDataRepository.save(any(WeatherData.class)))
@@ -470,7 +441,6 @@ class WeatherServiceTest {
             """;
         testActivity.setTrackPointsJson(trackPointsJson);
 
-        when(weatherDataRepository.existsByActivityId(activityId)).thenReturn(false);
         when(restTemplate.getForObject(any(URI.class), eq(String.class)))
             .thenReturn(SAMPLE_WEATHER_RESPONSE);
         when(weatherDataRepository.save(any(WeatherData.class)))
