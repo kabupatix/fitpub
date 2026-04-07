@@ -332,40 +332,34 @@ public class BatchImportService {
             log.debug("Rebuilding user heatmap...");
             heatmapGridService.recalculateUserHeatmap(user);
 
+            // Load all activities once instead of one findById per loop iteration. The previous
+            // implementation issued 4 × N individual SELECTs (four sequential loops, each calling
+            // activityRepository.findById per ID) — for a 200-file batch this was 800 round-trips
+            // before any downstream service did its own work.
+            List<Activity> activities = activityRepository.findAllById(activityIds);
+
             // Recalculate personal records for each activity
             log.debug("Recalculating personal records...");
-            for (UUID activityId : activityIds) {
-                Activity activity = activityRepository.findById(activityId).orElse(null);
-                if (activity != null) {
-                    personalRecordService.checkAndUpdatePersonalRecords(activity);
-                }
+            for (Activity activity : activities) {
+                personalRecordService.checkAndUpdatePersonalRecords(activity);
             }
 
             // Recalculate achievements for each activity
             log.debug("Recalculating achievements...");
-            for (UUID activityId : activityIds) {
-                Activity activity = activityRepository.findById(activityId).orElse(null);
-                if (activity != null) {
-                    achievementService.checkAndAwardAchievements(activity);
-                }
+            for (Activity activity : activities) {
+                achievementService.checkAndAwardAchievements(activity);
             }
 
             // Recalculate training load for each activity
             log.debug("Recalculating training load...");
-            for (UUID activityId : activityIds) {
-                Activity activity = activityRepository.findById(activityId).orElse(null);
-                if (activity != null) {
-                    trainingLoadService.updateTrainingLoad(activity);
-                }
+            for (Activity activity : activities) {
+                trainingLoadService.updateTrainingLoad(activity);
             }
 
             // Recalculate activity summaries (async)
             log.debug("Updating activity summaries...");
-            for (UUID activityId : activityIds) {
-                Activity activity = activityRepository.findById(activityId).orElse(null);
-                if (activity != null) {
-                    activitySummaryService.updateSummariesForActivity(activity);
-                }
+            for (Activity activity : activities) {
+                activitySummaryService.updateSummariesForActivity(activity);
             }
 
             log.info("Analytics recalculation completed for batch import job {}", job.getId());

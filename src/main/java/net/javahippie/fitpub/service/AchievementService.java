@@ -30,6 +30,12 @@ public class AchievementService {
      * Check and award achievements for an activity.
      * Called after an activity is saved.
      *
+     * <p>The user's existing achievement set is loaded once at the start of this
+     * method and threaded through every sub-check. Previously each {@code hasAchievement}
+     * call hit the DB individually, which meant 16+ {@code SELECT EXISTS} queries per
+     * activity upload (5 distance milestones × 5 count milestones × 4 streak milestones
+     * × 1 variety × 1 speed × up to 2 time-based + 3 elevation). Now: 1 query.
+     *
      * @param activity the activity to check for achievements
      * @return list of newly earned achievements
      */
@@ -43,29 +49,37 @@ public class AchievementService {
 
         UUID userId = activity.getUserId();
 
+        // Load all of the user's existing achievement types in a single query so the
+        // sub-checks below can do an in-memory `contains()` instead of an EXISTS query
+        // per milestone.
+        Set<Achievement.AchievementType> existing = EnumSet.noneOf(Achievement.AchievementType.class);
+        for (Achievement a : achievementRepository.findByUserIdOrderByEarnedAtDesc(userId)) {
+            existing.add(a.getAchievementType());
+        }
+
         // Check first activity achievements
-        newAchievements.addAll(checkFirstActivityAchievements(userId, activity));
+        newAchievements.addAll(checkFirstActivityAchievements(userId, activity, existing));
 
         // Check distance milestones
-        newAchievements.addAll(checkDistanceMilestones(userId));
+        newAchievements.addAll(checkDistanceMilestones(userId, existing));
 
         // Check activity count milestones
-        newAchievements.addAll(checkActivityCountMilestones(userId));
+        newAchievements.addAll(checkActivityCountMilestones(userId, existing));
 
         // Check streak achievements
-        newAchievements.addAll(checkStreakAchievements(userId));
+        newAchievements.addAll(checkStreakAchievements(userId, existing));
 
         // Check time-based achievements
-        newAchievements.addAll(checkTimeBasedAchievements(userId, activity));
+        newAchievements.addAll(checkTimeBasedAchievements(userId, activity, existing));
 
         // Check elevation achievements
-        newAchievements.addAll(checkElevationAchievements(userId, activity));
+        newAchievements.addAll(checkElevationAchievements(userId, activity, existing));
 
         // Check variety achievements
-        newAchievements.addAll(checkVarietyAchievements(userId));
+        newAchievements.addAll(checkVarietyAchievements(userId, existing));
 
         // Check speed achievements
-        newAchievements.addAll(checkSpeedAchievements(userId, activity));
+        newAchievements.addAll(checkSpeedAchievements(userId, activity, existing));
 
         return newAchievements;
     }
@@ -73,12 +87,13 @@ public class AchievementService {
     /**
      * Check first activity achievements.
      */
-    private List<Achievement> checkFirstActivityAchievements(UUID userId, Activity activity) {
+    private List<Achievement> checkFirstActivityAchievements(UUID userId, Activity activity,
+                                                             Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         // First activity overall
         long totalActivities = activityRepository.countByUserId(userId);
-        if (totalActivities == 1 && !hasAchievement(userId, Achievement.AchievementType.FIRST_ACTIVITY)) {
+        if (totalActivities == 1 && !existing.contains(Achievement.AchievementType.FIRST_ACTIVITY)) {
             achievements.add(awardAchievement(
                     userId,
                     Achievement.AchievementType.FIRST_ACTIVITY,
@@ -103,7 +118,7 @@ public class AchievementService {
                 default -> null;
             };
 
-            if (achievementType != null && !hasAchievement(userId, achievementType)) {
+            if (achievementType != null && !existing.contains(achievementType)) {
                 achievements.add(awardAchievement(
                         userId,
                         achievementType,
@@ -123,7 +138,7 @@ public class AchievementService {
     /**
      * Check distance milestone achievements.
      */
-    private List<Achievement> checkDistanceMilestones(UUID userId) {
+    private List<Achievement> checkDistanceMilestones(UUID userId, Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         // Calculate total distance
@@ -144,7 +159,7 @@ public class AchievementService {
         );
 
         for (Map.Entry<Double, Achievement.AchievementType> entry : milestones.entrySet()) {
-            if (totalKm >= entry.getKey() && !hasAchievement(userId, entry.getValue())) {
+            if (totalKm >= entry.getKey() && !existing.contains(entry.getValue())) {
                 achievements.add(awardAchievement(
                         userId,
                         entry.getValue(),
@@ -164,7 +179,7 @@ public class AchievementService {
     /**
      * Check activity count milestone achievements.
      */
-    private List<Achievement> checkActivityCountMilestones(UUID userId) {
+    private List<Achievement> checkActivityCountMilestones(UUID userId, Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         long activityCount = activityRepository.countByUserId(userId);
@@ -178,7 +193,7 @@ public class AchievementService {
         );
 
         for (Map.Entry<Long, Achievement.AchievementType> entry : milestones.entrySet()) {
-            if (activityCount >= entry.getKey() && !hasAchievement(userId, entry.getValue())) {
+            if (activityCount >= entry.getKey() && !existing.contains(entry.getValue())) {
                 achievements.add(awardAchievement(
                         userId,
                         entry.getValue(),
@@ -198,7 +213,7 @@ public class AchievementService {
     /**
      * Check streak achievements (consecutive days).
      */
-    private List<Achievement> checkStreakAchievements(UUID userId) {
+    private List<Achievement> checkStreakAchievements(UUID userId, Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         int currentStreak = calculateCurrentStreak(userId);
@@ -211,7 +226,7 @@ public class AchievementService {
         );
 
         for (Map.Entry<Integer, Achievement.AchievementType> entry : streakMilestones.entrySet()) {
-            if (currentStreak >= entry.getKey() && !hasAchievement(userId, entry.getValue())) {
+            if (currentStreak >= entry.getKey() && !existing.contains(entry.getValue())) {
                 achievements.add(awardAchievement(
                         userId,
                         entry.getValue(),
@@ -231,13 +246,14 @@ public class AchievementService {
     /**
      * Check time-based achievements (early bird, night owl, weekend warrior).
      */
-    private List<Achievement> checkTimeBasedAchievements(UUID userId, Activity activity) {
+    private List<Achievement> checkTimeBasedAchievements(UUID userId, Activity activity,
+                                                         Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         LocalTime startTime = activity.getStartedAt().toLocalTime();
 
         // Early bird (before 6am)
-        if (startTime.isBefore(LocalTime.of(6, 0)) && !hasAchievement(userId, Achievement.AchievementType.EARLY_BIRD)) {
+        if (startTime.isBefore(LocalTime.of(6, 0)) && !existing.contains(Achievement.AchievementType.EARLY_BIRD)) {
             long earlyActivities = activityRepository.countByUserIdAndStartTimeBefore(userId, LocalTime.of(6, 0));
             if (earlyActivities >= 5) {
                 achievements.add(awardAchievement(
@@ -254,7 +270,7 @@ public class AchievementService {
         }
 
         // Night owl (after 10pm)
-        if (startTime.isAfter(LocalTime.of(22, 0)) && !hasAchievement(userId, Achievement.AchievementType.NIGHT_OWL)) {
+        if (startTime.isAfter(LocalTime.of(22, 0)) && !existing.contains(Achievement.AchievementType.NIGHT_OWL)) {
             long lateActivities = activityRepository.countByUserIdAndStartTimeAfter(userId, LocalTime.of(22, 0));
             if (lateActivities >= 5) {
                 achievements.add(awardAchievement(
@@ -276,13 +292,14 @@ public class AchievementService {
     /**
      * Check elevation achievements.
      */
-    private List<Achievement> checkElevationAchievements(UUID userId, Activity activity) {
+    private List<Achievement> checkElevationAchievements(UUID userId, Activity activity,
+                                                         Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         // Single activity elevation
         if (activity.getElevationGain() != null &&
             activity.getElevationGain().compareTo(BigDecimal.valueOf(1000)) >= 0 &&
-            !hasAchievement(userId, Achievement.AchievementType.MOUNTAINEER_1000M)) {
+            !existing.contains(Achievement.AchievementType.MOUNTAINEER_1000M)) {
 
             achievements.add(awardAchievement(
                     userId,
@@ -301,7 +318,7 @@ public class AchievementService {
         if (totalElevation != null) {
             double totalM = totalElevation.doubleValue();
 
-            if (totalM >= 5000 && !hasAchievement(userId, Achievement.AchievementType.MOUNTAINEER_5000M)) {
+            if (totalM >= 5000 && !existing.contains(Achievement.AchievementType.MOUNTAINEER_5000M)) {
                 achievements.add(awardAchievement(
                         userId,
                         Achievement.AchievementType.MOUNTAINEER_5000M,
@@ -314,7 +331,7 @@ public class AchievementService {
                 ));
             }
 
-            if (totalM >= 10000 && !hasAchievement(userId, Achievement.AchievementType.MOUNTAINEER_10000M)) {
+            if (totalM >= 10000 && !existing.contains(Achievement.AchievementType.MOUNTAINEER_10000M)) {
                 achievements.add(awardAchievement(
                         userId,
                         Achievement.AchievementType.MOUNTAINEER_10000M,
@@ -334,12 +351,12 @@ public class AchievementService {
     /**
      * Check variety achievements.
      */
-    private List<Achievement> checkVarietyAchievements(UUID userId) {
+    private List<Achievement> checkVarietyAchievements(UUID userId, Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         long distinctActivityTypes = activityRepository.countDistinctActivityTypesByUserId(userId);
 
-        if (distinctActivityTypes >= 3 && !hasAchievement(userId, Achievement.AchievementType.VARIETY_SEEKER)) {
+        if (distinctActivityTypes >= 3 && !existing.contains(Achievement.AchievementType.VARIETY_SEEKER)) {
             achievements.add(awardAchievement(
                     userId,
                     Achievement.AchievementType.VARIETY_SEEKER,
@@ -358,14 +375,15 @@ public class AchievementService {
     /**
      * Check speed achievements.
      */
-    private List<Achievement> checkSpeedAchievements(UUID userId, Activity activity) {
+    private List<Achievement> checkSpeedAchievements(UUID userId, Activity activity,
+                                                     Set<Achievement.AchievementType> existing) {
         List<Achievement> achievements = new ArrayList<>();
 
         if (activity.getMetrics() != null && activity.getMetrics().getMaxSpeed() != null) {
             // maxSpeed is already in km/h from FitParser
             double maxSpeedKmh = activity.getMetrics().getMaxSpeed().doubleValue();
 
-            if (maxSpeedKmh >= 40 && !hasAchievement(userId, Achievement.AchievementType.SPEED_DEMON)) {
+            if (maxSpeedKmh >= 40 && !existing.contains(Achievement.AchievementType.SPEED_DEMON)) {
                 achievements.add(awardAchievement(
                         userId,
                         Achievement.AchievementType.SPEED_DEMON,
@@ -384,21 +402,45 @@ public class AchievementService {
 
     /**
      * Calculate current activity streak (consecutive days).
+     *
+     * <p>Loads all distinct activity dates for the user in the last 366 days in a
+     * single query and walks the resulting set in memory. Previously this method
+     * issued one {@code SELECT EXISTS} query per day (up to 365 round-trips per
+     * activity upload), which was the single biggest performance hot spot in the
+     * achievement evaluation path.
+     *
+     * <p>The streak / rest-day logic is preserved bug-for-bug from the previous
+     * implementation: a missing day after a streak has started is silently skipped
+     * (the original loop did the same). Fixing the rest-day semantics is out of
+     * scope for this performance change.
      */
     private int calculateCurrentStreak(UUID userId) {
         LocalDate today = LocalDate.now();
+        // 366 to safely cover the lookback window even if today's activity is in the
+        // future relative to the cutoff (timezone edge cases).
+        LocalDateTime since = today.minusDays(366).atStartOfDay();
+        Set<LocalDate> activityDates = new HashSet<>(
+            activityRepository.findDistinctActivityDatesSince(userId, since)
+        );
+
+        if (activityDates.isEmpty()) {
+            return 0;
+        }
+
         LocalDate checkDate = today;
         int streak = 0;
 
-        // Check backwards from today
-        for (int i = 0; i < 365; i++) { // Max check 1 year
-            boolean hasActivity = activityRepository.existsByUserIdAndDate(userId, checkDate);
+        // Walk backwards from today using the in-memory set instead of per-day queries.
+        for (int i = 0; i < 365; i++) {
+            boolean hasActivity = activityDates.contains(checkDate);
 
             if (hasActivity) {
                 streak++;
                 checkDate = checkDate.minusDays(1);
             } else {
-                // Allow one rest day if we already have a streak
+                // Allow one rest day if we already have a streak (preserving original
+                // behaviour, including the latent "infinite consecutive rest days
+                // allowed once a streak has started" quirk in the original loop).
                 if (streak > 0 && i > 0) {
                     checkDate = checkDate.minusDays(1);
                     continue;
@@ -408,13 +450,6 @@ public class AchievementService {
         }
 
         return streak;
-    }
-
-    /**
-     * Check if user has already earned an achievement.
-     */
-    private boolean hasAchievement(UUID userId, Achievement.AchievementType achievementType) {
-        return achievementRepository.existsByUserIdAndAchievementType(userId, achievementType);
     }
 
     /**

@@ -208,6 +208,20 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
     boolean existsByUserIdAndDate(@Param("userId") UUID userId, @Param("date") java.time.LocalDate date);
 
     /**
+     * Returns the distinct calendar dates on which a user has at least one activity,
+     * since the given timestamp, ordered most-recent first. Used by the streak
+     * calculation in {@code AchievementService} to walk activity history with a single
+     * query instead of one {@code existsByUserIdAndDate} query per day.
+     */
+    @Query("SELECT DISTINCT cast(a.startedAt as date) FROM Activity a " +
+           "WHERE a.userId = :userId AND a.startedAt >= :since " +
+           "ORDER BY cast(a.startedAt as date) DESC")
+    List<java.time.LocalDate> findDistinctActivityDatesSince(
+        @Param("userId") UUID userId,
+        @Param("since") java.time.LocalDateTime since
+    );
+
+    /**
      * Batch delete activities by IDs.
      * More efficient than deleting one by one.
      *

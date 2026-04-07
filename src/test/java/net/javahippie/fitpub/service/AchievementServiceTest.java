@@ -59,8 +59,9 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(userId, Activity.ActivityType.RUN)).thenReturn(1L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(5000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(true); // Has activity today for streak
-        lenient().when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
+        // Streak source: today has activity (1-day streak — not enough to trigger any streak achievement)
+        lenient().when(activityRepository.findDistinctActivityDatesSince(any(), any()))
+            .thenReturn(List.of(java.time.LocalDate.now()));
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -87,8 +88,6 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(userId, Activity.ActivityType.RUN)).thenReturn(1L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(50000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(2L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -110,8 +109,6 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(3L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(12000)); // 12 km
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -136,8 +133,6 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(5L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(50000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -160,9 +155,7 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(5L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(50000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
         when(activityRepository.countByUserIdAndStartTimeBefore(eq(userId), eq(LocalTime.of(6, 0)))).thenReturn(5L);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -185,9 +178,7 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(5L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(50000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
         when(activityRepository.countByUserIdAndStartTimeAfter(eq(userId), eq(LocalTime.of(22, 0)))).thenReturn(5L);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -210,8 +201,6 @@ class AchievementServiceTest {
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(50000));
         when(activityRepository.sumElevationGainByUserId(userId)).thenReturn(BigDecimal.valueOf(1200));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -234,8 +223,6 @@ class AchievementServiceTest {
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(200000));
         when(activityRepository.sumElevationGainByUserId(userId)).thenReturn(BigDecimal.valueOf(6000)); // 6000m total
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(2L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -260,8 +247,6 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(5L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(30000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(3L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -286,8 +271,6 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(5L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(200000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -305,13 +288,16 @@ class AchievementServiceTest {
         // Given - User has 7+ consecutive days of activities
         Activity activity = createActivity(Activity.ActivityType.RUN, 5000L, BigDecimal.ZERO);
 
-        // Mock activity repository to return true for last 7 days
         when(activityRepository.countByUserId(userId)).thenReturn(20L);
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(10L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(100000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(true);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
+        // Streak source: 8 consecutive days of activity ending today, ordered most-recent first
+        java.time.LocalDate today = java.time.LocalDate.now();
+        when(activityRepository.findDistinctActivityDatesSince(any(), any())).thenReturn(List.of(
+            today, today.minusDays(1), today.minusDays(2), today.minusDays(3),
+            today.minusDays(4), today.minusDays(5), today.minusDays(6), today.minusDays(7)
+        ));
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -326,11 +312,20 @@ class AchievementServiceTest {
     @Test
     @DisplayName("Should NOT award achievements if already earned")
     void testCheckAndAwardAchievements_AlreadyEarned() {
-        // Given - User already has these achievements
+        // Given - User already has every achievement
         Activity activity = createActivity(Activity.ActivityType.RUN, 5000L, BigDecimal.ZERO);
 
         when(activityRepository.countByUserId(userId)).thenReturn(10L);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(true); // Already earned
+        // Simulate "user already has all achievements" by returning one of every type from the
+        // preload query that checkAndAwardAchievements uses to populate the in-memory set.
+        List<Achievement> allEarned = new java.util.ArrayList<>();
+        for (Achievement.AchievementType type : Achievement.AchievementType.values()) {
+            Achievement a = new Achievement();
+            a.setUserId(userId);
+            a.setAchievementType(type);
+            allEarned.add(a);
+        }
+        when(achievementRepository.findByUserIdOrderByEarnedAtDesc(userId)).thenReturn(allEarned);
 
         // When
         List<Achievement> achievements = achievementService.checkAndAwardAchievements(activity);
@@ -369,8 +364,6 @@ class AchievementServiceTest {
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(5000));
         when(activityRepository.sumElevationGainByUserId(userId)).thenReturn(BigDecimal.valueOf(1100));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        when(activityRepository.existsByUserIdAndDate(any(), any())).thenReturn(false);
-        when(achievementRepository.existsByUserIdAndAchievementType(any(), any())).thenReturn(false);
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
