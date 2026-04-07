@@ -201,13 +201,27 @@ public class CommentController {
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         }
 
-        // Soft delete
+        // Soft delete locally
         comment.setDeleted(true);
         commentRepository.save(comment);
 
         log.info("User {} deleted comment {}", user.getUsername(), commentId);
 
-        // TODO: Send ActivityPub Delete activity to followers if activity is public
+        // Federate the deletion to remote followers so they tombstone their cached
+        // copy of the Note. The visibility check mirrors createComment(): the
+        // original Create was only sent if the parent activity was PUBLIC or
+        // FOLLOWERS, so the Delete needs to follow the same audience rule. The
+        // commentUri must match exactly what was used in the original Create
+        // activity, otherwise remote servers won't be able to match the tombstone
+        // to the cached note.
+        Activity activity = activityRepository.findById(activityId).orElse(null);
+        if (activity != null
+            && (activity.getVisibility() == Activity.Visibility.PUBLIC
+                || activity.getVisibility() == Activity.Visibility.FOLLOWERS)) {
+            String commentUri = baseUrl + "/activities/" + activityId + "/comments/" + commentId;
+            federationService.sendDeleteActivity(commentUri, user);
+            log.info("Sent Delete federation for comment {} on activity {}", commentId, activityId);
+        }
 
         return ResponseEntity.noContent().build();
     }

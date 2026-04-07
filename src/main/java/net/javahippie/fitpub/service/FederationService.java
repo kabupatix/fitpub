@@ -311,10 +311,16 @@ public class FederationService {
     }
 
     /**
-     * Get all follower inbox URLs for a local user.
+     * Get the inbox URLs of all <em>remote</em> followers of a local user.
+     *
+     * <p>Local followers are deliberately skipped: they live on the same server and
+     * see new activities via the local timeline queries, so there is nothing to
+     * federate to them. Without this filter, every call would attempt to
+     * {@code fetchRemoteActor(null)} for each local follower row, log a stack trace
+     * at ERROR level, and then drop the resulting null from the inbox list.
      *
      * @param userId the local user's ID
-     * @return list of inbox URLs
+     * @return list of remote follower inbox URLs (deduplicated, shared inbox preferred)
      */
     @Transactional(readOnly = true)
     public List<String> getFollowerInboxes(UUID userId) {
@@ -325,6 +331,7 @@ public class FederationService {
         List<Follow> followers = followRepository.findAcceptedFollowersByActorUri(actorUri);
 
         return followers.stream()
+            .filter(follow -> follow.getRemoteActorUri() != null) // skip local followers (no federation needed)
             .map(follow -> {
                 try {
                     RemoteActor actor = remoteActorRepository.findByActorUri(follow.getRemoteActorUri())
@@ -529,9 +536,14 @@ public class FederationService {
     /**
      * Send a Delete activity to notify followers that an object has been deleted.
      *
-     * @param objectUri the URI of the deleted object (e.g., activity URI)
+     * <p>Runs on the {@code taskExecutor} pool. Used for both activity deletes and
+     * comment (Note) deletes — the user-facing HTTP response shouldn't wait on the
+     * federation fanout to remote follower inboxes.
+     *
+     * @param objectUri the URI of the deleted object (e.g., activity URI or comment Note URI)
      * @param sender the user who deleted the object
      */
+    @Async("taskExecutor")
     public void sendDeleteActivity(String objectUri, User sender) {
         try {
             String deleteId = baseUrl + "/activities/delete/" + UUID.randomUUID();
