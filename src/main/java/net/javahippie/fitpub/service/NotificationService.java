@@ -39,9 +39,10 @@ public class NotificationService {
      *
      * @param activity the activity that was liked
      * @param likerActorUri the URI of the user who liked the activity
+     * @param emoji the reaction emoji (one of {@link net.javahippie.fitpub.model.ReactionEmoji#PALETTE})
      */
     @Transactional
-    public void createActivityLikedNotification(Activity activity, String likerActorUri) {
+    public void createActivityLikedNotification(Activity activity, String likerActorUri, String emoji) {
         // Get the activity owner
         User activityOwner = userRepository.findById(activity.getUserId())
             .orElse(null);
@@ -72,10 +73,12 @@ public class NotificationService {
             .actorAvatarUrl(actorInfo.avatarUrl)
             .activityId(activity.getId())
             .activityTitle(activity.getTitle() != null ? activity.getTitle() : "Untitled Activity")
+            .reactionEmoji(net.javahippie.fitpub.model.ReactionEmoji.normalise(emoji))
             .build();
 
         notificationRepository.save(notification);
-        log.debug("Created ACTIVITY_LIKED notification for user {} from {}", activityOwner.getUsername(), actorInfo.username);
+        log.debug("Created ACTIVITY_LIKED notification ({}) for user {} from {}",
+            notification.getReactionEmoji(), activityOwner.getUsername(), actorInfo.username);
     }
 
     /**

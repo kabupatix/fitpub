@@ -23,6 +23,7 @@ public class LikeDTO {
     private String actorUri;  // Local user URI or remote actor URI
     private String displayName;
     private String avatarUrl;
+    private String emoji;
     private LocalDateTime createdAt;
     private boolean local;
 
@@ -44,6 +45,7 @@ public class LikeDTO {
             .actorUri(actorUri)
             .displayName(like.getDisplayName())
             .avatarUrl(like.getAvatarUrl())
+            .emoji(like.getEmoji())
             .createdAt(like.getCreatedAt())
             .local(like.isLocal())
             .build();

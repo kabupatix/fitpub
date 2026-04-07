@@ -65,6 +65,10 @@ public class ActivityDTO {
     private Long likesCount;
     private Long commentsCount;
     private Boolean likedByCurrentUser; // True if current user has liked this activity
+    /** Per-emoji reaction counts. Only emojis with count &gt; 0 are present. */
+    private java.util.Map<String, Long> reactionCounts;
+    /** The current user's own reaction emoji on this activity, or null if none. */
+    private String currentUserReaction;
 
     // Peaks visited on this activity
     private List<PeakDTO> peaks;

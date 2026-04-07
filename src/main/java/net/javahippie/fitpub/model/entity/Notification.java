@@ -94,6 +94,13 @@ public class Notification {
     private String commentText;
 
     /**
+     * For ACTIVITY_LIKED notifications: the emoji used in the reaction.
+     * Null for other notification types. Existing rows backfilled to ❤️ in V29.
+     */
+    @Column(name = "reaction_emoji", length = 16)
+    private String reactionEmoji;
+
+    /**
      * Whether the notification has been read.
      */
     @Column(name = "is_read", nullable = false)

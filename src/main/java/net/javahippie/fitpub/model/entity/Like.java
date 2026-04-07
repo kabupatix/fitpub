@@ -66,6 +66,15 @@ public class Like {
     @Column(name = "activity_pub_id", length = 500)
     private String activityPubId;
 
+    /**
+     * Emoji reaction. One of the fixed palette enforced by a DB CHECK constraint and
+     * by {@link net.javahippie.fitpub.model.ReactionEmoji}. Defaults to ❤️ for backwards
+     * compatibility with the original heart-only "like" behaviour.
+     */
+    @Column(name = "emoji", nullable = false, length = 16)
+    @Builder.Default
+    private String emoji = "❤️";
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

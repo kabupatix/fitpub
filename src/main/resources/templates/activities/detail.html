@@ -354,27 +354,19 @@
             <div class="row mb-4">
                 <div class="col-12">
                     <div class="card">
-                        <div class="card-header d-flex justify-content-between align-items-center">
+                        <div class="card-header">
                             <h5 class="mb-0">
                                 <i class="bi bi-chat-heart"></i> Social
                             </h5>
-                            <div>
-                                <button id="likeBtn" class="btn btn-sm btn-outline-danger me-2">
-                                    <i class="bi bi-heart"></i>
-                                    <span id="likeBtnText">Like</span>
-                                    (<span id="likeCount">0</span>)
-                                </button>
-                            </div>
                         </div>
                         <div class="card-body">
-                            <!-- Likes Section -->
-                            <div class="mb-4" id="likesSection">
-                                <h6 class="text-muted mb-3">
-                                    <i class="bi bi-heart-fill text-danger"></i>
-                                    Liked by <span id="likesCountText">0</span>
-                                </h6>
-                                <div id="likesList" class="d-flex flex-wrap gap-2">
-                                    <!-- Likes will be populated here -->
+                            <!-- Reactions Section -->
+                            <div class="mb-4" id="reactionsSection">
+                                <div id="reactionsBlockContainer">
+                                    <!-- Filled in by JS once the activity loads -->
+                                </div>
+                                <div class="mt-3" id="likesList">
+                                    <!-- Per-reactor list of who reacted with what -->
                                 </div>
                             </div>
 
@@ -1476,46 +1468,192 @@
                     }
                 }
 
-                // Social interactions functionality
+                // The fixed reaction palette. Mirrors the backend ReactionEmoji.PALETTE
+                // and the V29 DB CHECK constraint. Keep both sides in sync.
+                const REACTION_PALETTE = ['❤️', '🔥', '💪', '🏔️', '🤯', '🥲'];
+
+                // Social interactions: load reactions for the activity, render the
+                // reactions block, and render the per-reactor list.
                 async function loadLikes() {
                     try {
                         const response = await fetch(`/api/activities/${activityId}/likes`);
                         if (response.ok) {
                             const likes = await response.json();
-                            renderLikes(likes);
+                            renderReactorList(likes);
                         }
                     } catch (error) {
                         console.error('Error loading likes:', error);
                     }
                 }
 
-                function renderLikes(likes) {
+                function renderReactorList(likes) {
                     const likesList = document.getElementById('likesList');
-                    const likeCount = document.getElementById('likeCount');
-                    const likesCountText = document.getElementById('likesCountText');
-
-                    likeCount.textContent = likes.length;
-                    likesCountText.textContent = likes.length;
-
                     if (likes.length === 0) {
-                        likesList.innerHTML = '<span class="text-muted">No likes yet</span>';
+                        likesList.innerHTML = '<span class="text-muted">No reactions yet</span>';
                         return;
                     }
 
-                    likesList.innerHTML = likes.map(like => {
+                    likesList.innerHTML = `<div class="d-flex flex-wrap gap-2">` + likes.map(like => {
                         const displayName = like.displayName || like.username || 'Unknown';
                         const avatarHtml = like.avatarUrl
-                            ? `<img src="${like.avatarUrl}" alt="${displayName}" class="rounded-circle me-2" width="32" height="32">`
+                            ? `<img src="${like.avatarUrl}" alt="${escapeHtml(displayName)}" class="rounded-circle me-2" width="32" height="32">`
                             : `<i class="bi bi-person-circle me-2" style="font-size: 32px;"></i>`;
+                        const emoji = like.emoji || '❤️';
 
                         return `
                             <div class="d-flex align-items-center p-2 border rounded">
                                 ${avatarHtml}
-                                <span>${displayName}</span>
+                                <span>${escapeHtml(displayName)}</span>
+                                <span class="ms-2">${emoji}</span>
                             </div>
                         `;
-                    }).join('');
+                    }).join('') + `</div>`;
                 }
+
+                /**
+                 * Build the reactions block HTML for the detail page from the activity DTO.
+                 * Identical structure to FitPubTimeline.renderReactionsBlock so the same CSS
+                 * classes/handlers work — but inlined here so the detail page doesn't depend
+                 * on timeline.js being loaded.
+                 */
+                function renderReactionsBlockHtml(activity) {
+                    const counts = activity.reactionCounts || {};
+                    const currentReaction = activity.currentUserReaction || null;
+
+                    const chips = REACTION_PALETTE
+                        .filter(emoji => (counts[emoji] || 0) > 0)
+                        .map(emoji => {
+                            const count = counts[emoji];
+                            const mine = emoji === currentReaction;
+                            return `<button type="button"
+                                class="btn btn-sm reaction-chip ${mine ? 'btn-primary' : 'btn-outline-secondary'}"
+                                data-activity-id="${activity.id}"
+                                data-emoji="${emoji}"
+                                data-mine="${mine}"
+                                title="${mine ? 'Click to remove your reaction' : 'React with ' + emoji}">
+                                <span class="reaction-emoji">${emoji}</span>
+                                <span class="reaction-count">${count}</span>
+                            </button>`;
+                        })
+                        .join('');
+
+                    const pickerButtons = REACTION_PALETTE.map(emoji => `
+                        <button type="button" class="btn btn-sm btn-light reaction-picker-option"
+                                data-activity-id="${activity.id}"
+                                data-emoji="${emoji}"
+                                title="React with ${emoji}">${emoji}</button>
+                    `).join('');
+
+                    return `
+                        <div class="reactions-block d-flex flex-wrap gap-1 align-items-center"
+                             data-activity-id="${activity.id}">
+                            ${chips}
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary reaction-add-btn"
+                                    data-activity-id="${activity.id}"
+                                    title="Add a reaction">
+                                <i class="bi bi-emoji-smile"></i>
+                            </button>
+                            <div class="reaction-picker d-none gap-1"
+                                 data-activity-id="${activity.id}">
+                                ${pickerButtons}
+                            </div>
+                        </div>
+                    `;
+                }
+
+                function renderReactionsBlock(activity) {
+                    const container = document.getElementById('reactionsBlockContainer');
+                    container.innerHTML = renderReactionsBlockHtml(activity);
+                    attachReactionHandlers(container.querySelector('.reactions-block'));
+                }
+
+                function attachReactionHandlers(block) {
+                    if (!block) return;
+                    block.querySelectorAll('.reaction-chip').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            const emoji = btn.dataset.emoji;
+                            const mine = btn.dataset.mine === 'true';
+                            sendReaction(mine ? null : emoji);
+                        });
+                    });
+
+                    const addBtn = block.querySelector('.reaction-add-btn');
+                    const picker = block.querySelector('.reaction-picker');
+                    if (addBtn && picker) {
+                        addBtn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            const willOpen = picker.classList.contains('d-none');
+                            document.querySelectorAll('.reaction-picker').forEach(p => {
+                                p.classList.add('d-none');
+                                p.classList.remove('d-flex');
+                            });
+                            if (willOpen) {
+                                picker.classList.remove('d-none');
+                                picker.classList.add('d-flex');
+                            }
+                        });
+                    }
+
+                    block.querySelectorAll('.reaction-picker-option').forEach(btn => {
+                        btn.addEventListener('click', (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (picker) {
+                                picker.classList.add('d-none');
+                                picker.classList.remove('d-flex');
+                            }
+                            sendReaction(btn.dataset.emoji);
+                        });
+                    });
+                }
+
+                async function sendReaction(emoji) {
+                    if (!FitPubAuth.isAuthenticated()) {
+                        window.location.href = '/login';
+                        return;
+                    }
+                    try {
+                        let response;
+                        if (emoji === null) {
+                            response = await FitPubAuth.authenticatedFetch(
+                                `/api/activities/${activityId}/likes`,
+                                { method: 'DELETE' }
+                            );
+                        } else {
+                            response = await FitPubAuth.authenticatedFetch(
+                                `/api/activities/${activityId}/likes`,
+                                { method: 'POST', body: { emoji: emoji } }
+                            );
+                        }
+                        if (!response.ok) {
+                            console.error('Reaction request failed:', response.status);
+                            return;
+                        }
+                        // Reload the full state from the server so the per-reactor list is fresh too
+                        const activityResponse = await fetch(`/api/activities/${activityId}`);
+                        if (activityResponse.ok) {
+                            const updatedActivity = await activityResponse.json();
+                            renderReactionsBlock(updatedActivity);
+                        }
+                        loadLikes();
+                    } catch (err) {
+                        console.error('Reaction request errored:', err);
+                        FitPub.showAlert('Failed to update reaction. Please try again.', 'danger');
+                    }
+                }
+
+                // One document-level click handler closes any open picker on outside click.
+                document.addEventListener('click', (e) => {
+                    const insidePicker = e.target.closest('.reaction-picker, .reaction-add-btn');
+                    if (insidePicker) return;
+                    document.querySelectorAll('.reaction-picker').forEach(p => {
+                        p.classList.add('d-none');
+                        p.classList.remove('d-flex');
+                    });
+                });
 
                 async function loadComments() {
                     try {
@@ -1585,18 +1723,12 @@
                 function setupSocialInteractions(activity) {
                     const isAuthenticated = FitPubAuth.isAuthenticated();
 
+                    // Render the reactions block from the activity DTO regardless of auth.
+                    // Anonymous users see the chips and counts; clicking one bounces them to
+                    // login (handled inside sendReaction).
+                    renderReactionsBlock(activity);
+
                     if (isAuthenticated) {
-                        // Show comment form for authenticated users
-                        document.getElementById('commentForm').style.display = 'block';
-
-                        // Update like button based on activity data
-                        if (activity.likedByCurrentUser) {
-                            updateLikeButton(true);
-                        }
-
-                        // Setup like button click handler
-                        document.getElementById('likeBtn').addEventListener('click', handleLikeClick);
-
                         // Show comment form for authenticated users
                         document.getElementById('commentForm').style.display = 'block';
 
@@ -1605,63 +1737,6 @@
                     } else {
                         // Show login prompt for non-authenticated users
                         document.getElementById('loginPrompt').style.display = 'block';
-                        // Hide like button for non-authenticated users
-                        document.getElementById('likeBtn').style.display = 'none';
-                    }
-                }
-
-                async function handleLikeClick(event) {
-                    event.preventDefault();
-                    const btn = event.currentTarget;
-                    const isLiked = btn.classList.contains('btn-danger');
-
-                    try {
-                        if (isLiked) {
-                            // Unlike
-                            const response = await FitPubAuth.authenticatedFetch(
-                                `/api/activities/${activityId}/likes`,
-                                { method: 'DELETE' }
-                            );
-
-                            if (response.ok) {
-                                updateLikeButton(false);
-                                loadLikes(); // Reload likes list
-                            }
-                        } else {
-                            // Like
-                            const response = await FitPubAuth.authenticatedFetch(
-                                `/api/activities/${activityId}/likes`,
-                                { method: 'POST' }
-                            );
-
-                            if (response.ok) {
-                                updateLikeButton(true);
-                                loadLikes(); // Reload likes list
-                            }
-                        }
-                    } catch (error) {
-                        console.error('Error toggling like:', error);
-                        FitPub.showAlert('Failed to update like. Please try again.', 'danger');
-                    }
-                }
-
-                function updateLikeButton(isLiked) {
-                    const btn = document.getElementById('likeBtn');
-                    const btnText = document.getElementById('likeBtnText');
-                    const icon = btn.querySelector('i');
-
-                    if (isLiked) {
-                        btn.classList.remove('btn-outline-danger');
-                        btn.classList.add('btn-danger');
-                        icon.classList.remove('bi-heart');
-                        icon.classList.add('bi-heart-fill');
-                        btnText.textContent = 'Liked';
-                    } else {
-                        btn.classList.remove('btn-danger');
-                        btn.classList.add('btn-outline-danger');
-                        icon.classList.remove('bi-heart-fill');
-                        icon.classList.add('bi-heart');
-                        btnText.textContent = 'Like';
                     }
                 }
 

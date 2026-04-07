@@ -3,6 +3,13 @@
  * Handles loading and displaying timeline activities with preview maps
  */
 
+/**
+ * The fixed palette of reaction emojis. Mirrors the backend
+ * `net.javahippie.fitpub.model.ReactionEmoji.PALETTE` and the V29 DB CHECK
+ * constraint. If you change this list, update both sides.
+ */
+const REACTION_PALETTE = ['❤️', '🔥', '💪', '🏔️', '🤯', '🥲'];
+
 const FitPubTimeline = {
     currentPage: 0,
     totalPages: 0,
@@ -28,7 +35,25 @@ const FitPubTimeline = {
 
         this.setupSearchHandlers();
         this.renderHashtagFilterBadge();
+        this.setupReactionPickerDismissal();
         this.loadTimeline(0);
+    },
+
+    /**
+     * One document-level click handler that closes any open reaction picker
+     * when the user clicks outside of it. Installed once per page.
+     */
+    setupReactionPickerDismissal: function() {
+        if (this._reactionPickerDismissalInstalled) return;
+        this._reactionPickerDismissalInstalled = true;
+        document.addEventListener('click', (e) => {
+            const insidePicker = e.target.closest('.reaction-picker, .reaction-add-btn');
+            if (insidePicker) return;
+            document.querySelectorAll('.reaction-picker').forEach(p => {
+                p.classList.add('d-none');
+                p.classList.remove('d-flex');
+            });
+        });
     },
 
     /**
@@ -242,16 +267,11 @@ const FitPubTimeline = {
                             <!-- Map or placeholder will be rendered here -->
                         </div>
 
+                        <!-- Reactions (chips + picker) -->
+                        ${this.renderReactionsBlock(activity)}
+
                         <!-- Activity Actions -->
                         <div class="d-flex gap-2 align-items-center">
-                            <button
-                                class="btn btn-sm ${activity.likedByCurrentUser ? 'btn-danger' : 'btn-outline-danger'} like-btn"
-                                data-activity-id="${activity.id}"
-                                data-liked="${activity.likedByCurrentUser || false}"
-                            >
-                                <i class="bi bi-heart${activity.likedByCurrentUser ? '-fill' : ''}"></i>
-                                <span class="like-count">${activity.likesCount || 0}</span>
-                            </button>
                             ${activity.isLocal
                                 ? `<a href="/activities/${activity.id}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-eye"></i> View Details
@@ -280,80 +300,223 @@ const FitPubTimeline = {
             });
         }, 100);
 
-        // Setup like button handlers
-        this.setupLikeButtons();
+        // Setup reaction handlers (chips + picker buttons)
+        this.setupReactionHandlers();
     },
 
     /**
-     * Setup like button click handlers
+     * Build the reactions block (existing reaction chips + add-reaction button + picker)
+     * for a single activity. Designed to be re-rendered in place after a state change
+     * via {@link FitPubTimeline.replaceReactionsBlock}.
+     *
+     * @param {Object} activity - Activity object with reactionCounts and currentUserReaction
+     * @returns {string} HTML for the reactions block
      */
-    setupLikeButtons: function() {
-        const likeButtons = document.querySelectorAll('.like-btn');
+    renderReactionsBlock: function(activity) {
+        const counts = activity.reactionCounts || {};
+        const currentReaction = activity.currentUserReaction || null;
 
-        likeButtons.forEach(btn => {
-            btn.addEventListener('click', async (e) => {
+        // Render one chip per emoji that has at least one reaction. Sort by palette
+        // order so the layout is stable as reactions come and go.
+        const chips = REACTION_PALETTE
+            .filter(emoji => (counts[emoji] || 0) > 0)
+            .map(emoji => {
+                const count = counts[emoji];
+                const mine = emoji === currentReaction;
+                return `<button type="button"
+                    class="btn btn-sm reaction-chip ${mine ? 'btn-primary' : 'btn-outline-secondary'}"
+                    data-activity-id="${activity.id}"
+                    data-emoji="${emoji}"
+                    data-mine="${mine}"
+                    title="${mine ? 'Click to remove your reaction' : 'React with ' + emoji}">
+                    <span class="reaction-emoji">${emoji}</span>
+                    <span class="reaction-count">${count}</span>
+                </button>`;
+            })
+            .join('');
+
+        // Picker buttons — hidden by default, toggled by the add button.
+        const pickerButtons = REACTION_PALETTE.map(emoji => `
+            <button type="button" class="btn btn-sm btn-light reaction-picker-option"
+                    data-activity-id="${activity.id}"
+                    data-emoji="${emoji}"
+                    title="React with ${emoji}">${emoji}</button>
+        `).join('');
+
+        return `
+            <div class="reactions-block d-flex flex-wrap gap-1 align-items-center mb-2"
+                 data-activity-id="${activity.id}">
+                ${chips}
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary reaction-add-btn"
+                        data-activity-id="${activity.id}"
+                        title="Add a reaction">
+                    <i class="bi bi-emoji-smile"></i>
+                </button>
+                <div class="reaction-picker d-none gap-1"
+                     data-activity-id="${activity.id}">
+                    ${pickerButtons}
+                </div>
+            </div>
+        `;
+    },
+
+    /**
+     * Replace the reactions block for one activity in the DOM, after a successful
+     * POST/DELETE. Recalculates counts and the current user's reaction from the
+     * delta and rerenders the block in place.
+     */
+    replaceReactionsBlock: function(activity) {
+        const block = document.querySelector(`.reactions-block[data-activity-id="${activity.id}"]`);
+        if (!block) return;
+        // Render into a wrapper, then move the children into the existing parent so
+        // any siblings (action buttons) stay put.
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = this.renderReactionsBlock(activity).trim();
+        const newBlock = wrapper.firstElementChild;
+        block.replaceWith(newBlock);
+        // The new block needs its handlers attached.
+        this.attachReactionHandlersWithin(newBlock);
+    },
+
+    /**
+     * Wire up click handlers on reaction chips, picker options, and add buttons
+     * across the entire timeline list.
+     */
+    setupReactionHandlers: function() {
+        document.querySelectorAll('.reactions-block').forEach(block => {
+            this.attachReactionHandlersWithin(block);
+        });
+    },
+
+    /**
+     * Wire up click handlers on a single reactions-block element. Used both at
+     * timeline render time and after replacing a single block.
+     */
+    attachReactionHandlersWithin: function(block) {
+        // Existing reaction chip: click toggles the reaction (if it's mine, remove
+        // it; otherwise switch my reaction to this emoji).
+        block.querySelectorAll('.reaction-chip').forEach(btn => {
+            btn.addEventListener('click', (e) => {
                 e.preventDefault();
-
-                // Check if user is authenticated
-                if (!FitPubAuth.isAuthenticated()) {
-                    window.location.href = '/login';
-                    return;
-                }
-
                 const activityId = btn.dataset.activityId;
-                const isLiked = btn.dataset.liked === 'true';
-                const icon = btn.querySelector('i');
-                const countSpan = btn.querySelector('.like-count');
-
-                try {
-                    // Disable button during request
-                    btn.disabled = true;
-
-                    if (isLiked) {
-                        // Unlike
-                        const response = await FitPubAuth.authenticatedFetch(
-                            `/api/activities/${activityId}/likes`,
-                            { method: 'DELETE' }
-                        );
-
-                        if (response.ok) {
-                            // Update UI
-                            btn.classList.remove('btn-danger');
-                            btn.classList.add('btn-outline-danger');
-                            icon.classList.remove('bi-heart-fill');
-                            icon.classList.add('bi-heart');
-                            btn.dataset.liked = 'false';
-
-                            // Update count
-                            const currentCount = parseInt(countSpan.textContent) || 0;
-                            countSpan.textContent = Math.max(0, currentCount - 1);
-                        }
-                    } else {
-                        // Like
-                        const response = await FitPubAuth.authenticatedFetch(
-                            `/api/activities/${activityId}/likes`,
-                            { method: 'POST' }
-                        );
-
-                        if (response.ok) {
-                            // Update UI
-                            btn.classList.remove('btn-outline-danger');
-                            btn.classList.add('btn-danger');
-                            icon.classList.remove('bi-heart');
-                            icon.classList.add('bi-heart-fill');
-                            btn.dataset.liked = 'true';
-
-                            // Update count
-                            const currentCount = parseInt(countSpan.textContent) || 0;
-                            countSpan.textContent = currentCount + 1;
-                        }
-                    }
-                } catch (error) {
-                    console.error('Error toggling like:', error);
-                } finally {
-                    btn.disabled = false;
+                const emoji = btn.dataset.emoji;
+                const mine = btn.dataset.mine === 'true';
+                if (mine) {
+                    this.sendReaction(activityId, null);
+                } else {
+                    this.sendReaction(activityId, emoji);
                 }
             });
+        });
+
+        // Add-reaction button: toggles the picker.
+        const addBtn = block.querySelector('.reaction-add-btn');
+        const picker = block.querySelector('.reaction-picker');
+        if (addBtn && picker) {
+            addBtn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const willOpen = picker.classList.contains('d-none');
+                // Close any other open pickers first
+                document.querySelectorAll('.reaction-picker').forEach(p => {
+                    p.classList.add('d-none');
+                    p.classList.remove('d-flex');
+                });
+                if (willOpen) {
+                    picker.classList.remove('d-none');
+                    picker.classList.add('d-flex');
+                }
+            });
+        }
+
+        // Picker options: react with the chosen emoji.
+        block.querySelectorAll('.reaction-picker-option').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                const activityId = btn.dataset.activityId;
+                const emoji = btn.dataset.emoji;
+                if (picker) {
+                    picker.classList.add('d-none');
+                    picker.classList.remove('d-flex');
+                }
+                this.sendReaction(activityId, emoji);
+            });
+        });
+    },
+
+    /**
+     * POST or DELETE the user's reaction to a given activity, then re-render the
+     * reactions block. {@code emoji} of {@code null} means "remove my reaction".
+     */
+    sendReaction: async function(activityId, emoji) {
+        // Anonymous users can't react — bounce them to login.
+        if (!FitPubAuth.isAuthenticated()) {
+            window.location.href = '/login';
+            return;
+        }
+
+        try {
+            let response;
+            if (emoji === null) {
+                response = await FitPubAuth.authenticatedFetch(
+                    `/api/activities/${activityId}/likes`,
+                    { method: 'DELETE' }
+                );
+            } else {
+                response = await FitPubAuth.authenticatedFetch(
+                    `/api/activities/${activityId}/likes`,
+                    { method: 'POST', body: { emoji: emoji } }
+                );
+            }
+            if (!response.ok) {
+                console.error('Reaction request failed:', response.status);
+                return;
+            }
+            // Apply the change locally to avoid a full timeline reload.
+            this.applyReactionChange(activityId, emoji);
+        } catch (err) {
+            console.error('Reaction request errored:', err);
+        }
+    },
+
+    /**
+     * Update the in-memory state of one activity card after a successful reaction
+     * change and re-render its block. Reads the current state from the DOM (counts
+     * and the user's existing reaction), applies the delta, and replaces the block.
+     */
+    applyReactionChange: function(activityId, newEmoji) {
+        const block = document.querySelector(`.reactions-block[data-activity-id="${activityId}"]`);
+        if (!block) return;
+
+        // Read current state out of the DOM
+        const counts = {};
+        block.querySelectorAll('.reaction-chip').forEach(chip => {
+            counts[chip.dataset.emoji] = parseInt(chip.querySelector('.reaction-count').textContent, 10) || 0;
+        });
+        let currentReaction = null;
+        const mineChip = block.querySelector('.reaction-chip[data-mine="true"]');
+        if (mineChip) {
+            currentReaction = mineChip.dataset.emoji;
+        }
+
+        // Apply the delta locally
+        if (currentReaction) {
+            counts[currentReaction] = Math.max(0, (counts[currentReaction] || 0) - 1);
+            if (counts[currentReaction] === 0) {
+                delete counts[currentReaction];
+            }
+        }
+        if (newEmoji) {
+            counts[newEmoji] = (counts[newEmoji] || 0) + 1;
+        }
+
+        // Re-render with the synthesised activity object
+        this.replaceReactionsBlock({
+            id: activityId,
+            reactionCounts: counts,
+            currentUserReaction: newEmoji
         });
     },
 

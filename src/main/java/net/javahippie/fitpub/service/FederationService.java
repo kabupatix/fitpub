@@ -333,13 +333,20 @@ public class FederationService {
     }
 
     /**
-     * Send a Like activity.
+     * Send a Like activity carrying an emoji reaction in the {@code content} field.
+     *
+     * <p>This follows the Pleroma/Akkoma convention for emoji reactions: a regular
+     * ActivityPub {@code Like} activity with a non-empty {@code content} field whose
+     * value is the emoji. Pleroma/Akkoma render this as an emoji reaction; vanilla
+     * Mastodon ignores the content and shows it as a regular like — graceful
+     * degradation in both directions.
      *
      * @param objectUri the URI of the object being liked
-     * @param sender the local user liking the object
+     * @param sender the local user reacting to the object
+     * @param emoji the reaction emoji (must be from {@link net.javahippie.fitpub.model.ReactionEmoji#PALETTE})
      */
     @Transactional
-    public void sendLikeActivity(String objectUri, User sender) {
+    public void sendLikeActivity(String objectUri, User sender, String emoji) {
         try {
             String likeId = baseUrl + "/activities/like/" + UUID.randomUUID();
             String actorUri = baseUrl + "/users/" + sender.getUsername();
@@ -350,6 +357,7 @@ public class FederationService {
             likeActivity.put("id", likeId);
             likeActivity.put("actor", actorUri);
             likeActivity.put("object", objectUri);
+            likeActivity.put("content", emoji);
             likeActivity.put("published", Instant.now().toString());
 
             // Send to all follower inboxes
@@ -358,7 +366,7 @@ public class FederationService {
                 sendActivity(inbox, likeActivity, sender);
             }
 
-            log.info("Sent Like activity for object: {} to {} inboxes", objectUri, inboxes.size());
+            log.info("Sent Like activity ({}) for object: {} to {} inboxes", emoji, objectUri, inboxes.size());
 
         } catch (Exception e) {
             log.error("Failed to send Like activity for object: {}", objectUri, e);

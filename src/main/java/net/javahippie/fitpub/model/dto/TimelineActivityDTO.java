@@ -56,6 +56,10 @@ public class TimelineActivityDTO {
     private Long likesCount;
     private Long commentsCount;
     private Boolean likedByCurrentUser;
+    /** Per-emoji reaction counts. Only emojis with count &gt; 0 are present. */
+    private java.util.Map<String, Long> reactionCounts;
+    /** The current user's own reaction emoji on this activity, or null if none. */
+    private String currentUserReaction;
 
     // GPS track availability
     private Boolean hasGpsTrack;  // True if activity has GPS data

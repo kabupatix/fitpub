@@ -19,6 +19,7 @@ import net.javahippie.fitpub.service.FederationService;
 import net.javahippie.fitpub.service.WeatherService;
 import net.javahippie.fitpub.service.FitFileService;
 import net.javahippie.fitpub.service.PrivacyZoneService;
+import net.javahippie.fitpub.service.ReactionEnricher;
 import net.javahippie.fitpub.service.TrackPrivacyFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
@@ -56,6 +57,7 @@ public class ActivityController {
     private final PrivacyZoneService privacyZoneService;
     private final TrackPrivacyFilter trackPrivacyFilter;
     private final net.javahippie.fitpub.repository.ActivityPeakRepository activityPeakRepository;
+    private final ReactionEnricher reactionEnricher;
 
     @Value("${fitpub.base-url}")
     private String baseUrl;
@@ -187,6 +189,7 @@ public class ActivityController {
             // Public activities are always accessible, but apply privacy filtering
             ActivityDTO dto = ActivityDTO.fromEntityWithFiltering(activity, requestingUserId, privacyZones, trackPrivacyFilter);
             populatePeaks(dto, id);
+            reactionEnricher.enrichSingle(dto, requestingUserId);
             log.debug("Activity {} - DTO privacy zones: {}", id,
                       dto.getPrivacyZones() != null ? dto.getPrivacyZones().size() : 0);
             return ResponseEntity.ok(dto);
@@ -208,6 +211,7 @@ public class ActivityController {
         // Apply privacy filtering (owner sees full track, others see filtered)
         ActivityDTO dto = ActivityDTO.fromEntityWithFiltering(checkedActivity, requestingUserId, privacyZones, trackPrivacyFilter);
         populatePeaks(dto, id);
+        reactionEnricher.enrichSingle(dto, requestingUserId);
         return ResponseEntity.ok(dto);
     }
 
@@ -246,6 +250,9 @@ public class ActivityController {
 
         // Convert to DTOs
         org.springframework.data.domain.Page<ActivityDTO> dtoPage = activityPage.map(ActivityDTO::fromEntity);
+
+        // Populate per-emoji reaction counts and the current user's reactions
+        reactionEnricher.enrichActivities(dtoPage.getContent(), userId);
 
         // Return Spring Page object with all pagination metadata
         return ResponseEntity.ok(dtoPage);
@@ -376,6 +383,7 @@ public class ActivityController {
                 .sorted((a, b) -> b.getStartedAt().compareTo(a.getStartedAt()))
                 .map(activity -> ActivityDTO.fromEntityWithFiltering(activity, requestingUserId, privacyZones, trackPrivacyFilter))
                 .toList();
+            reactionEnricher.enrichActivities(dtos, requestingUserId);
             org.springframework.data.domain.Pageable peakPageable =
                 org.springframework.data.domain.PageRequest.of(0, Math.max(dtos.size(), 1));
             return ResponseEntity.ok(new org.springframework.data.domain.PageImpl<>(dtos, peakPageable, dtos.size()));
@@ -394,6 +402,7 @@ public class ActivityController {
             ActivityDTO.fromEntityWithFiltering(activity, requestingUserId, privacyZones, trackPrivacyFilter)
         );
 
+        reactionEnricher.enrichActivities(dtoPage.getContent(), requestingUserId);
         return ResponseEntity.ok(dtoPage);
     }
 

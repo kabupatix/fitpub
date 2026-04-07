@@ -46,6 +46,7 @@ public class TimelineService {
     private final LikeRepository likeRepository;
     private final CommentRepository commentRepository;
     private final TimelineResultMapper timelineResultMapper;
+    private final ReactionEnricher reactionEnricher;
 
     @Value("${fitpub.base-url}")
     private String baseUrl;
@@ -166,6 +167,7 @@ public class TimelineService {
 
         log.debug("Fetched {} activities in single optimized query", timelineActivities.size());
 
+        reactionEnricher.enrichTimeline(timelineActivities, userId);
         return new PageImpl<>(timelineActivities, pageable, results.getTotalElements());
     }
 
@@ -200,6 +202,7 @@ public class TimelineService {
 
         log.debug("Fetched {} activities in single optimized query", timelineActivities.size());
 
+        reactionEnricher.enrichTimeline(timelineActivities, userId);
         return new PageImpl<>(timelineActivities, pageable, results.getTotalElements());
     }
 
@@ -248,6 +251,7 @@ public class TimelineService {
 
         log.debug("Found {} activities matching search criteria", timelineActivities.size());
 
+        reactionEnricher.enrichTimeline(timelineActivities, userId);
         return new PageImpl<>(timelineActivities, pageable, results.getTotalElements());
     }
 
@@ -287,6 +291,7 @@ public class TimelineService {
 
         log.debug("Found {} activities matching search criteria", timelineActivities.size());
 
+        reactionEnricher.enrichTimeline(timelineActivities, userId);
         return new PageImpl<>(timelineActivities, pageable, results.getTotalElements());
     }
 
@@ -337,6 +342,7 @@ public class TimelineService {
 
         log.debug("Found {} activities matching search criteria", timelineActivities.size());
 
+        reactionEnricher.enrichTimeline(timelineActivities, userId);
         return new PageImpl<>(timelineActivities, pageable, results.getTotalElements());
     }
 

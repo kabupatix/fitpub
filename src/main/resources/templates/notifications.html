@@ -400,7 +400,8 @@
             getNotificationMessage(notification) {
                 switch (notification.type) {
                     case 'ACTIVITY_LIKED':
-                        return `liked your activity <strong>${this.escapeHtml(notification.activityTitle)}</strong>`;
+                        const reactionEmoji = notification.reactionEmoji || '❤️';
+                        return `reacted ${reactionEmoji} to your activity <strong>${this.escapeHtml(notification.activityTitle)}</strong>`;
                     case 'ACTIVITY_COMMENTED':
                         const preview = notification.commentText
                             ? `: "${this.escapeHtml(notification.commentText)}"`

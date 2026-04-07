@@ -28,6 +28,8 @@ public class NotificationDTO {
     private String activityTitle;
     private UUID commentId;
     private String commentText;
+    /** For ACTIVITY_LIKED notifications: the emoji used in the reaction. Null otherwise. */
+    private String reactionEmoji;
     private boolean read;
     private LocalDateTime createdAt;
     private LocalDateTime readAt;
@@ -50,6 +52,7 @@ public class NotificationDTO {
             .activityTitle(notification.getActivityTitle())
             .commentId(notification.getCommentId())
             .commentText(notification.getCommentText())
+            .reactionEmoji(notification.getReactionEmoji())
             .read(notification.isRead())
             .createdAt(notification.getCreatedAt())
             .readAt(notification.getReadAt())

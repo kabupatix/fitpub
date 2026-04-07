@@ -387,13 +387,24 @@ public class InboxProcessor {
 
     /**
      * Process a Like activity.
+     *
+     * <p>Pleroma/Akkoma carry an emoji in the {@code content} field; vanilla Mastodon
+     * doesn't set it. We normalise via {@link net.javahippie.fitpub.model.ReactionEmoji#normalise}
+     * so unknown / missing values gracefully degrade to ❤️ rather than being rejected.
+     *
+     * <p>If the same remote actor has already reacted to this activity, we update the
+     * existing row in place — this matches the local UPSERT semantics so a remote actor
+     * can switch their reaction without us seeing it as a "new" like (and without
+     * generating a duplicate notification).
      */
     private void processLike(String username, Map<String, Object> activity) {
         try {
             String actor = (String) activity.get("actor");
             String objectUri = (String) activity.get("object");
+            String content = (String) activity.get("content");
+            String emoji = net.javahippie.fitpub.model.ReactionEmoji.normalise(content);
 
-            log.debug("Received Like from {} for object {}", actor, objectUri);
+            log.debug("Received Like ({}) from {} for object {}", emoji, actor, objectUri);
 
             // Extract activity ID from the object URI
             // Expected format: https://fitpub.example/activities/{uuid}
@@ -413,9 +424,24 @@ public class InboxProcessor {
             // Fetch remote actor information
             RemoteActor remoteActor = federationService.fetchRemoteActor(actor);
 
-            // Check if like already exists
-            if (likeRepository.existsByActivityIdAndRemoteActorUri(activityId, actor)) {
-                log.debug("Like already exists from {} for activity {}", actor, activityId);
+            // UPSERT: if a previous reaction from this actor exists, update the emoji
+            // in place. Otherwise create a new row and notify the activity owner.
+            java.util.Optional<Like> existing =
+                likeRepository.findByActivityIdAndRemoteActorUri(activityId, actor);
+            if (existing.isPresent()) {
+                Like like = existing.get();
+                if (!emoji.equals(like.getEmoji())) {
+                    like.setEmoji(emoji);
+                    like.setDisplayName(remoteActor.getDisplayName() != null
+                        ? remoteActor.getDisplayName() : remoteActor.getUsername());
+                    like.setAvatarUrl(remoteActor.getAvatarUrl());
+                    likeRepository.save(like);
+                    log.info("Switched remote reaction from {} on activity {} to {}",
+                        actor, activityId, emoji);
+                } else {
+                    log.debug("Like ({}) already recorded from {} for activity {}",
+                        emoji, actor, activityId);
+                }
                 return;
             }
 
@@ -424,15 +450,16 @@ public class InboxProcessor {
                 .activityId(activityId)
                 .userId(null) // Remote actor, not a local user
                 .remoteActorUri(actor)
+                .emoji(emoji)
                 .displayName(remoteActor.getDisplayName() != null ? remoteActor.getDisplayName() : remoteActor.getUsername())
                 .avatarUrl(remoteActor.getAvatarUrl())
                 .build();
 
             likeRepository.save(like);
-            log.info("Processed Like from {} for activity {}", actor, activityId);
+            log.info("Processed Like ({}) from {} for activity {}", emoji, actor, activityId);
 
             // Create notification for activity owner
-            notificationService.createActivityLikedNotification(localActivity, actor);
+            notificationService.createActivityLikedNotification(localActivity, actor, emoji);
 
         } catch (Exception e) {
             log.error("Error processing Like activity", e);
