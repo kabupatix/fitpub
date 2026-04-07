@@ -305,7 +305,10 @@
         }
 
         function formatPRValue(type, value, unit) {
-            if (unit === 'seconds') {
+            // 'seconds' (race finish times) and 'seconds_per_km' (pace) both render
+            // as h:mm:ss / mm:ss. Previously the dashboard only handled 'seconds',
+            // so pace records fell through and showed as raw integer seconds.
+            if (unit === 'seconds' || unit === 'seconds_per_km') {
                 const hours = Math.floor(value / 3600);
                 const minutes = Math.floor((value % 3600) / 60);
                 const seconds = Math.floor(value % 60);

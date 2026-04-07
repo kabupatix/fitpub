@@ -208,15 +208,22 @@ public interface ActivityRepository extends JpaRepository<Activity, UUID> {
     boolean existsByUserIdAndDate(@Param("userId") UUID userId, @Param("date") java.time.LocalDate date);
 
     /**
-     * Returns the distinct calendar dates on which a user has at least one activity,
-     * since the given timestamp, ordered most-recent first. Used by the streak
-     * calculation in {@code AchievementService} to walk activity history with a single
-     * query instead of one {@code existsByUserIdAndDate} query per day.
+     * Returns the start timestamps of all activities for a user since the given
+     * cutoff, ordered most-recent first. Used by the streak calculation in
+     * {@code AchievementService} to walk activity history with a single query
+     * instead of one {@code existsByUserIdAndDate} query per day.
+     *
+     * <p>Returns raw {@code LocalDateTime} values rather than distinct {@code LocalDate}s
+     * because Hibernate 6 + Spring Data 3 do not reliably convert SQL date scalar
+     * projections to {@code List<LocalDate>} (the result comes back as
+     * {@code ArrayList<?>} and the per-element conversion fails). The caller is
+     * responsible for deduplicating to dates in Java — the result set is bounded
+     * (max ~366 days × small per-day activity count) so Java-side distinct is cheap.
      */
-    @Query("SELECT DISTINCT cast(a.startedAt as date) FROM Activity a " +
+    @Query("SELECT a.startedAt FROM Activity a " +
            "WHERE a.userId = :userId AND a.startedAt >= :since " +
-           "ORDER BY cast(a.startedAt as date) DESC")
-    List<java.time.LocalDate> findDistinctActivityDatesSince(
+           "ORDER BY a.startedAt DESC")
+    List<java.time.LocalDateTime> findActivityStartTimestampsSince(
         @Param("userId") UUID userId,
         @Param("since") java.time.LocalDateTime since
     );

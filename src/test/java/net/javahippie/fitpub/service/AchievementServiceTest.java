@@ -59,9 +59,9 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(userId, Activity.ActivityType.RUN)).thenReturn(1L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(5000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        // Streak source: today has activity (1-day streak — not enough to trigger any streak achievement)
-        lenient().when(activityRepository.findDistinctActivityDatesSince(any(), any()))
-            .thenReturn(List.of(java.time.LocalDate.now()));
+        // Streak source: today has one activity (1-day streak — not enough to trigger any streak achievement)
+        lenient().when(activityRepository.findActivityStartTimestampsSince(any(), any()))
+            .thenReturn(List.of(java.time.LocalDateTime.now()));
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         // When
@@ -292,11 +292,11 @@ class AchievementServiceTest {
         when(activityRepository.countByUserIdAndActivityType(any(), any())).thenReturn(10L);
         when(activityRepository.sumDistanceByUserId(userId)).thenReturn(BigDecimal.valueOf(100000));
         when(activityRepository.countDistinctActivityTypesByUserId(userId)).thenReturn(1L);
-        // Streak source: 8 consecutive days of activity ending today, ordered most-recent first
-        java.time.LocalDate today = java.time.LocalDate.now();
-        when(activityRepository.findDistinctActivityDatesSince(any(), any())).thenReturn(List.of(
-            today, today.minusDays(1), today.minusDays(2), today.minusDays(3),
-            today.minusDays(4), today.minusDays(5), today.minusDays(6), today.minusDays(7)
+        // Streak source: 8 consecutive days of activity ending today, as raw timestamps
+        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+        when(activityRepository.findActivityStartTimestampsSince(any(), any())).thenReturn(List.of(
+            now, now.minusDays(1), now.minusDays(2), now.minusDays(3),
+            now.minusDays(4), now.minusDays(5), now.minusDays(6), now.minusDays(7)
         ));
         when(achievementRepository.save(any(Achievement.class))).thenAnswer(invocation -> invocation.getArgument(0));
 

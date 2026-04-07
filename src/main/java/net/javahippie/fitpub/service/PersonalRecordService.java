@@ -95,13 +95,21 @@ public class PersonalRecordService {
             }
         }
 
-        // Check max speed (from metrics)
+        // Check max speed (from metrics).
+        //
+        // ActivityMetrics.maxSpeed is already in km/h (FitParser/GpxParser convert from m/s
+        // before persisting). The personal_records.unit column says "mps" though, so the
+        // display side multiplies by 3.6 to "convert to km/h" — which produced values 3.6×
+        // too high. Convert to true m/s here so the stored value matches its labelled unit.
+        // Existing wrongly-labelled rows are corrected by V30 in the same change.
         if (activity.getMetrics() != null && activity.getMetrics().getMaxSpeed() != null) {
+            BigDecimal maxSpeedMps = activity.getMetrics().getMaxSpeed()
+                    .divide(BigDecimal.valueOf(3.6), 2, RoundingMode.HALF_UP);
             PersonalRecord maxSpeedRecord = checkRecord(
                     activity.getUserId(),
                     activityType,
                     PersonalRecord.RecordType.MAX_SPEED,
-                    activity.getMetrics().getMaxSpeed(),
+                    maxSpeedMps,
                     "mps",
                     activity.getId(),
                     activity.getStartedAt()

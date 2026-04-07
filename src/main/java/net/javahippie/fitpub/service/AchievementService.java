@@ -403,11 +403,16 @@ public class AchievementService {
     /**
      * Calculate current activity streak (consecutive days).
      *
-     * <p>Loads all distinct activity dates for the user in the last 366 days in a
-     * single query and walks the resulting set in memory. Previously this method
-     * issued one {@code SELECT EXISTS} query per day (up to 365 round-trips per
-     * activity upload), which was the single biggest performance hot spot in the
-     * achievement evaluation path.
+     * <p>Loads all activity timestamps for the user in the last 366 days in a single
+     * query, deduplicates them to a {@code Set<LocalDate>} in Java, and walks the
+     * resulting set in memory. Previously this method issued one {@code SELECT EXISTS}
+     * query per day (up to 365 round-trips per activity upload), which was the single
+     * biggest performance hot spot in the achievement evaluation path.
+     *
+     * <p>Java-side date deduplication is intentional: Hibernate 6 + Spring Data 3 do
+     * not reliably convert SQL date scalar projections to {@code List<LocalDate>}.
+     * The result set is small (a few hundred timestamps at most) so the cost of
+     * Java-side distinct is negligible.
      *
      * <p>The streak / rest-day logic is preserved bug-for-bug from the previous
      * implementation: a missing day after a streak has started is silently skipped
@@ -419,9 +424,10 @@ public class AchievementService {
         // 366 to safely cover the lookback window even if today's activity is in the
         // future relative to the cutoff (timezone edge cases).
         LocalDateTime since = today.minusDays(366).atStartOfDay();
-        Set<LocalDate> activityDates = new HashSet<>(
-            activityRepository.findDistinctActivityDatesSince(userId, since)
-        );
+        Set<LocalDate> activityDates = new HashSet<>();
+        for (LocalDateTime ts : activityRepository.findActivityStartTimestampsSince(userId, since)) {
+            activityDates.add(ts.toLocalDate());
+        }
 
         if (activityDates.isEmpty()) {
             return 0;
