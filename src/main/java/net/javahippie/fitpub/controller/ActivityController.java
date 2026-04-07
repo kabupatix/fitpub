@@ -352,9 +352,10 @@ public class ActivityController {
         @PathVariable String username,
         @RequestParam(defaultValue = "0") int page,
         @RequestParam(defaultValue = "10") int size,
+        @RequestParam(required = false) Integer peakId,
         @AuthenticationPrincipal UserDetails userDetails
     ) {
-        log.debug("Retrieving public activities for user: {}", username);
+        log.debug("Retrieving public activities for user: {} (peakId: {})", username, peakId);
 
         // Get user by username
         User user = userRepository.findByUsername(username)
@@ -365,6 +366,20 @@ public class ActivityController {
 
         // Get activity owner's privacy zones
         java.util.List<PrivacyZone> privacyZones = privacyZoneService.getActivePrivacyZones(user.getId());
+
+        // Filter by peak if requested
+        if (peakId != null) {
+            java.util.List<UUID> activityIds = activityPeakRepository.findPublicActivityIdsByUserAndPeak(user.getId(), peakId);
+            java.util.List<ActivityDTO> dtos = activityIds.stream()
+                .map(id -> fitFileService.getActivityById(id))
+                .filter(java.util.Objects::nonNull)
+                .sorted((a, b) -> b.getStartedAt().compareTo(a.getStartedAt()))
+                .map(activity -> ActivityDTO.fromEntityWithFiltering(activity, requestingUserId, privacyZones, trackPrivacyFilter))
+                .toList();
+            org.springframework.data.domain.Pageable peakPageable =
+                org.springframework.data.domain.PageRequest.of(0, Math.max(dtos.size(), 1));
+            return ResponseEntity.ok(new org.springframework.data.domain.PageImpl<>(dtos, peakPageable, dtos.size()));
+        }
 
         // Get public activities only
         org.springframework.data.domain.Pageable pageable =

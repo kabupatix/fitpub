@@ -17,6 +17,20 @@ public interface ActivityPeakRepository extends JpaRepository<ActivityPeak, Inte
     boolean existsByActivityIdAndPeakId(UUID activityId, Integer peakId);
 
     /**
+     * Find all public activity IDs for a user that include a specific peak,
+     * ordered by start time descending.
+     */
+    @Query("""
+           SELECT ap.activityId FROM ActivityPeak ap
+           WHERE ap.peak.id = :peakId
+             AND ap.activityId IN (
+                 SELECT a.id FROM Activity a
+                 WHERE a.userId = :userId AND a.visibility = 'PUBLIC'
+             )
+           """)
+    List<UUID> findPublicActivityIdsByUserAndPeak(UUID userId, Integer peakId);
+
+    /**
      * Find all unique peaks visited by a user with visit count and latest activity,
      * ordered by name.
      */

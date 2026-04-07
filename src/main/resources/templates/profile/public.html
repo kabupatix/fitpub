@@ -107,10 +107,13 @@
             </div>
 
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0">
                         <i class="bi bi-list-task"></i> Public Activities
                     </h5>
+                    <button type="button" id="clearPeakFilter" class="btn btn-sm btn-outline-secondary d-none">
+                        <i class="bi bi-x-lg"></i> <span id="clearPeakFilterLabel">Clear filter</span>
+                    </button>
                 </div>
                 <div class="card-body">
                     <!-- Loading Indicator for Activities -->
@@ -312,6 +315,14 @@
                 }
 
                 let currentPage = 0;
+                let activePeakId = null;
+
+                document.getElementById('clearPeakFilter').addEventListener('click', function() {
+                    activePeakId = null;
+                    currentPage = 0;
+                    this.classList.add('d-none');
+                    loadPublicActivities(null, null);
+                });
 
                 async function loadPeaks() {
                     try {
@@ -325,16 +336,30 @@
                                     const nameHtml = peak.wikipedia
                                         ? `<a href="${peak.wikipedia}" target="_blank" rel="noopener">${peak.name} <i class="bi bi-box-arrow-up-right small"></i></a>`
                                         : peak.name;
-                                    const visits = peak.visitCount > 1 ? `${peak.visitCount} visits` : '1 visit';
-                                    const activityLink = peak.latestActivityId
-                                        ? ` · <a href="/activities/${peak.latestActivityId}">latest activity</a>`
-                                        : '';
+                                    const visitText = peak.visitCount > 1 ? `${peak.visitCount} visits` : '1 visit';
+                                    const visitsLink = `<a href="#" class="peak-filter-link" data-peak-id="${peak.id}" data-peak-name="${peak.name.replace(/"/g, '&quot;')}">${visitText}</a>`;
                                     return `<li class="list-group-item d-flex justify-content-between align-items-center">
                                         <span>${nameHtml}</span>
-                                        <span class="text-muted small">${visits}${activityLink}</span>
+                                        <span class="text-muted small">${visitsLink}</span>
                                     </li>`;
                                 }).join('');
                                 document.getElementById('peaksSection').style.display = 'block';
+
+                                // Wire up peak filter links
+                                document.querySelectorAll('.peak-filter-link').forEach(link => {
+                                    link.addEventListener('click', function(e) {
+                                        e.preventDefault();
+                                        const peakId = this.dataset.peakId;
+                                        const peakName = this.dataset.peakName;
+                                        currentPage = 0;
+                                        activePeakId = peakId;
+                                        const clearBtn = document.getElementById('clearPeakFilter');
+                                        document.getElementById('clearPeakFilterLabel').textContent = `Clear filter: ${peakName}`;
+                                        clearBtn.classList.remove('d-none');
+                                        loadPublicActivities(null, peakId);
+                                        document.getElementById('activitiesList').scrollIntoView({behavior: 'smooth'});
+                                    });
+                                });
                             }
                         }
                     } catch (error) {
@@ -342,9 +367,18 @@
                     }
                 }
 
-                async function loadPublicActivities(userId) {
+                async function loadPublicActivities(userId, peakId) {
                     try {
-                        const response = await fetch(`/api/activities/user/${targetUsername}?page=${currentPage}&size=10`);
+                        // Reset visibility
+                        document.getElementById('activitiesLoading').classList.remove('d-none');
+                        document.getElementById('activitiesList').classList.add('d-none');
+                        document.getElementById('activitiesEmpty').classList.add('d-none');
+                        document.getElementById('pagination').classList.add('d-none');
+
+                        let url = `/api/activities/user/${targetUsername}?page=${currentPage}&size=10`;
+                        if (peakId) url += `&peakId=${peakId}`;
+
+                        const response = await fetch(url);
 
                         if (response.ok) {
                             const data = await response.json();
@@ -445,7 +479,7 @@
 
                 window.changePage = function(page) {
                     currentPage = page;
-                    loadPublicActivities();
+                    loadPublicActivities(null, activePeakId);
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                 };
 

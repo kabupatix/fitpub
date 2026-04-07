@@ -634,6 +634,7 @@ public class UserController {
         var result = projections.stream()
             .map(p -> {
                 Map<String, Object> map = new java.util.LinkedHashMap<>();
+                map.put("id", p.getPeakId());
                 map.put("name", p.getPeakName());
                 map.put("wikipedia", p.getWikipedia());
                 map.put("visitCount", p.getVisitCount());
