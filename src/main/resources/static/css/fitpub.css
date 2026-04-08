@@ -1424,3 +1424,231 @@ h1 {
 .reaction-picker-option:hover {
     background: #f1f3f5;
 }
+
+/* ============================================================================
+   Unified activity chart
+   Self-contained component used on the activity detail page. Uses its own
+   dark palette (defined as local CSS custom properties) so the chart can be
+   styled independently of the rest of the site theme.
+   ============================================================================ */
+
+.activity-overview-chart {
+    /* Light-mode defaults — chart blends into the page's white card surfaces.
+       The metric line colors are saturated enough to read on either background,
+       so they stay constant; only the chrome (background, text, grid, borders)
+       flips between modes. */
+    --aoc-bg: #ffffff;
+    --aoc-surface: #f7f3fb;
+    --aoc-border: #e2d6ee;
+    --aoc-text: #1a0033;
+    --aoc-text-muted: #6b5b80;
+    --aoc-grid: rgba(26, 0, 51, 0.08);
+    --aoc-accent: #9d00ff;
+    --aoc-elevation: #0099b3;
+    --aoc-heart-rate: #d63450;
+    --aoc-pace: #5b48d6;
+    --aoc-cadence: #d97706;
+
+    background: var(--aoc-bg);
+    border: 1px solid var(--aoc-border);
+    border-radius: 0.75rem;
+    color: var(--aoc-text);
+    padding: 1rem 1.25rem 1.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+    .activity-overview-chart {
+        /* Dark-mode palette per the spec. */
+        --aoc-bg: #1a1028;
+        --aoc-surface: #231638;
+        --aoc-border: #3a2855;
+        --aoc-text: #f3eaff;
+        --aoc-text-muted: #a18bb8;
+        --aoc-grid: rgba(152, 130, 181, 0.08);
+        --aoc-accent: #e040fb;
+        --aoc-elevation: #00e5ff;
+        --aoc-heart-rate: #ff5277;
+        --aoc-pace: #7c6bff;
+        --aoc-cadence: #ffab40;
+    }
+}
+
+.activity-overview-chart__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.activity-overview-chart__title {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--aoc-text);
+    letter-spacing: 0.02em;
+}
+
+.activity-overview-chart__axis-toggle {
+    display: inline-flex;
+    background: var(--aoc-surface);
+    border: 1px solid var(--aoc-border);
+    border-radius: 999px;
+    padding: 2px;
+    gap: 2px;
+}
+
+.activity-overview-chart__axis-toggle button {
+    border: none;
+    background: transparent;
+    color: var(--aoc-text-muted);
+    font-size: 0.78rem;
+    font-weight: 600;
+    padding: 0.3rem 0.85rem;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+
+.activity-overview-chart__axis-toggle button.is-active {
+    background: var(--aoc-accent);
+    color: #ffffff;
+}
+
+.activity-overview-chart__cards {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 500px) {
+    .activity-overview-chart__cards {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.activity-overview-chart__card {
+    background: var(--aoc-surface);
+    border: 1.5px solid transparent;
+    border-radius: 0.6rem;
+    padding: 0.7rem 0.85rem;
+    cursor: pointer;
+    transition: border-color 0.15s, transform 0.1s;
+    user-select: none;
+    position: relative;
+}
+
+.activity-overview-chart__card:hover {
+    transform: translateY(-1px);
+}
+
+.activity-overview-chart__card.is-active[data-metric="elevation"] { border-color: var(--aoc-elevation); }
+.activity-overview-chart__card.is-active[data-metric="heartRate"] { border-color: var(--aoc-heart-rate); }
+.activity-overview-chart__card.is-active[data-metric="pace"]      { border-color: var(--aoc-pace); }
+.activity-overview-chart__card.is-active[data-metric="cadence"]   { border-color: var(--aoc-cadence); }
+
+.activity-overview-chart__card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.activity-overview-chart__card-label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--aoc-text-muted);
+    font-weight: 600;
+}
+
+.activity-overview-chart__card-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.activity-overview-chart__card[data-metric="elevation"] .activity-overview-chart__card-dot { background: var(--aoc-elevation); }
+.activity-overview-chart__card[data-metric="heartRate"] .activity-overview-chart__card-dot { background: var(--aoc-heart-rate); }
+.activity-overview-chart__card[data-metric="pace"]      .activity-overview-chart__card-dot { background: var(--aoc-pace); }
+.activity-overview-chart__card[data-metric="cadence"]   .activity-overview-chart__card-dot { background: var(--aoc-cadence); }
+
+.activity-overview-chart__card-check {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 1.5px solid var(--aoc-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px;
+    color: transparent;
+    transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.activity-overview-chart__card.is-active .activity-overview-chart__card-check {
+    background: var(--aoc-accent);
+    border-color: var(--aoc-accent);
+    color: #ffffff;
+}
+
+.activity-overview-chart__card-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--aoc-text);
+    line-height: 1.1;
+}
+
+.activity-overview-chart__card-secondary {
+    font-size: 0.72rem;
+    color: var(--aoc-text-muted);
+    margin-top: 0.15rem;
+}
+
+.activity-overview-chart__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-bottom: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--aoc-text-muted);
+}
+
+.activity-overview-chart__legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.activity-overview-chart__legend-bar {
+    width: 14px;
+    height: 3px;
+    border-radius: 2px;
+}
+
+.activity-overview-chart__canvas-wrapper {
+    position: relative;
+    height: 320px;
+    background: var(--aoc-bg);
+    border-radius: 0.4rem;
+}
+
+@media (max-width: 500px) {
+    .activity-overview-chart__canvas-wrapper {
+        height: 240px;
+    }
+}
+
+.activity-overview-chart__empty {
+    color: var(--aoc-text-muted);
+    text-align: center;
+    padding: 2rem 1rem;
+    font-size: 0.9rem;
+}

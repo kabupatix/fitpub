@@ -264,60 +264,25 @@
                 </div>
             </div>
 
-            <!-- Charts Row -->
+            <!-- Unified Activity Chart -->
             <div class="row mb-4" id="chartsSection" style="display: none;">
-                <!-- Elevation Chart -->
-                <div class="col-lg-4 col-md-12 mb-3 mb-lg-0" id="elevationSection" style="display: none;">
-                    <div class="card h-100">
-                        <div class="card-header py-2">
-                            <h6 class="mb-0">
-                                <i class="bi bi-graph-up"></i> Elevation
-                            </h6>
+                <div class="col-12">
+                    <div class="activity-overview-chart" id="activityOverviewChart">
+                        <div class="activity-overview-chart__header">
+                            <h6 class="activity-overview-chart__title">Activity overview</h6>
+                            <div class="activity-overview-chart__axis-toggle" role="tablist" aria-label="X-axis mode">
+                                <button type="button" data-axis="time">Time</button>
+                                <button type="button" data-axis="distance">Distance</button>
+                            </div>
                         </div>
-                        <div class="card-body">
-                            <canvas id="elevationChart" height="120"></canvas>
+                        <div class="activity-overview-chart__cards" id="activityOverviewChartCards">
+                            <!-- metric cards filled in by JS -->
                         </div>
-                    </div>
-                </div>
-
-                <!-- Heart Rate Chart -->
-                <div class="col-lg-4 col-md-12 mb-3 mb-lg-0" id="heartRateSection" style="display: none;">
-                    <div class="card h-100">
-                        <div class="card-header py-2">
-                            <h6 class="mb-0">
-                                <i class="bi bi-heart-pulse"></i> Heart Rate
-                            </h6>
+                        <div class="activity-overview-chart__legend" id="activityOverviewChartLegend">
+                            <!-- legend filled in by JS -->
                         </div>
-                        <div class="card-body">
-                            <canvas id="heartRateChart" height="120"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Speed/Pace Chart -->
-                <div class="col-lg-4 col-md-12 mb-3 mb-lg-0" id="speedSection" style="display: none;">
-                    <div class="card h-100">
-                        <div class="card-header py-2">
-                            <h6 class="mb-0">
-                                <i class="bi bi-speedometer2"></i> Speed/Pace
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="speedChart" height="120"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Cadence Chart -->
-                <div class="col-lg-4 col-md-12 mb-3 mb-lg-0" id="cadenceSection" style="display: none;">
-                    <div class="card h-100">
-                        <div class="card-header py-2">
-                            <h6 class="mb-0" id="cadenceChartTitle">
-                                <i class="bi bi-arrow-repeat"></i> Cadence
-                            </h6>
-                        </div>
-                        <div class="card-body">
-                            <canvas id="cadenceChart" height="120"></canvas>
+                        <div class="activity-overview-chart__canvas-wrapper">
+                            <canvas id="activityOverviewChartCanvas"></canvas>
                         </div>
                     </div>
                 </div>
@@ -494,6 +459,35 @@
                     };
                 }
 
+                /**
+                 * Move the Leaflet hover marker to the GPS coordinates of the given
+                 * track-point index. Used by the chart's hover handler so the user
+                 * sees the location on the map for whichever metric data point they're
+                 * pointing at on the chart. No-op if the marker, the map, or the track
+                 * point data is not yet available.
+                 *
+                 * @param {number} trackPointIndex - index into currentTrackPoints
+                 */
+                function updateMapMarker(trackPointIndex) {
+                    if (!activityMap || !hoverMarker || !currentTrackPoints) return;
+                    const point = currentTrackPoints[trackPointIndex];
+                    if (point && point.latitude != null && point.longitude != null) {
+                        hoverMarker.setLatLng([point.latitude, point.longitude]);
+                        hoverMarker.setOpacity(1);
+                    }
+                }
+
+                /**
+                 * Hide the Leaflet hover marker. Called when the user moves their
+                 * cursor off the chart so the marker doesn't linger at the last
+                 * hovered position.
+                 */
+                function hideMapMarker() {
+                    if (hoverMarker) {
+                        hoverMarker.setOpacity(0);
+                    }
+                }
+
                 // Load activity details
                 loadActivity();
 
@@ -661,45 +655,28 @@
                         document.getElementById('peaksSection').style.display = 'block';
                     }
 
-                    // Render elevation chart if data exists
+                    // Render the unified activity chart if track points exist. Replaces
+                    // the four separate elevation/HR/speed/cadence panels — see
+                    // SPEC-unified-activity-chart.md.
                     if (activity.trackPoints && activity.trackPoints.length > 0) {
-                        // Store track points globally for map marker updates
+                        // Store track points globally for map marker updates from the
+                        // chart's hover handler.
                         currentTrackPoints = activity.trackPoints;
 
                         const hasElevation = activity.trackPoints.some(p => p.elevation != null);
-                        if (hasElevation) {
-                            document.getElementById('elevationSection').style.display = 'block';
-                            renderElevationChart(activity.trackPoints);
-                        }
-
-                        // Render heart rate chart if data exists
                         const hasHeartRate = activity.trackPoints.some(p => p.heartRate != null && p.heartRate > 0);
-                        if (hasHeartRate) {
-                            document.getElementById('heartRateSection').style.display = 'block';
-                            renderHeartRateChart(activity.trackPoints);
-                        }
+                        const hasSpeed     = activity.trackPoints.some(p => p.speed != null && p.speed > 0);
+                        const hasCadence   = activity.trackPoints.some(p => p.cadence != null && p.cadence > 0);
 
-                        // Render speed/pace chart if data exists
-                        const hasSpeed = activity.trackPoints.some(p => p.speed != null && p.speed > 0);
-                        if (hasSpeed) {
-                            document.getElementById('speedSection').style.display = 'block';
-                            renderSpeedChart(activity.trackPoints);
-                        }
-
-                        // Render cadence chart if data exists. Cadence is sport-dependent:
-                        // foot sports (run/walk/hike/mountaineering) display steps-per-minute,
-                        // cycling and other sports display revolutions-per-minute. The stored
-                        // values are already in the right unit per the parser fix; here we
-                        // just pick the right axis label.
-                        const hasCadence = activity.trackPoints.some(p => p.cadence != null && p.cadence > 0);
-                        if (hasCadence) {
-                            document.getElementById('cadenceSection').style.display = 'block';
-                            renderCadenceChart(activity.trackPoints, isOnFootActivityType(activity.activityType));
-                        }
-
-                        // Show charts section if at least one chart is visible
                         if (hasElevation || hasHeartRate || hasSpeed || hasCadence) {
                             document.getElementById('chartsSection').style.display = 'flex';
+                            renderUnifiedActivityChart(activity, {
+                                hasElevation: hasElevation,
+                                hasHeartRate: hasHeartRate,
+                                hasSpeed:     hasSpeed,
+                                hasCadence:   hasCadence,
+                                onFoot:       isOnFootActivityType(activity.activityType)
+                            });
                         }
                     }
 
@@ -938,620 +915,666 @@
                     }
                 }
 
-                function renderElevationChart(trackPoints) {
-                    // Calculate cumulative distance and prepare elevation data
-                    let cumulativeDistance = 0;
-                    const elevationData = [];
+                /* ======================================================================
+                   Unified activity chart
+                   Implements SPEC-unified-activity-chart.md.
 
-                    for (let i = 0; i < trackPoints.length; i++) {
-                        const point = trackPoints[i];
+                   - One Chart.js line chart with one Y-axis per metric.
+                   - Metric cards toggle visibility per metric (always at least one).
+                   - X-axis pill toggle switches between elapsed time and distance.
+                   - LTTB decimation reduces 1 Hz data (5,000+ pts) to ~700 buckets
+                     before rendering. Decimation is per-axis-mode and cached.
+                   - Pace axis is reversed (faster = top) and tooltip-formatted M:SS.
+                   - Hover integration with the Leaflet map marker is preserved via the
+                     existing updateMapMarker / hideMapMarker helpers.
+                   ====================================================================== */
 
-                        // Calculate distance from previous point (simple Haversine approximation)
-                        if (i > 0 && point.latitude && point.longitude) {
-                            const prev = trackPoints[i - 1];
-                            if (prev.latitude && prev.longitude) {
-                                const distance = calculateDistance(
-                                    prev.latitude, prev.longitude,
-                                    point.latitude, point.longitude
-                                );
-                                cumulativeDistance += distance;
-                            }
+                // Module-level state so the axis toggle / card clicks can rebuild
+                // the chart in place without re-passing the activity data.
+                let activityChart_state = null;
+
+                /**
+                 * Top-level entry point. Called once after the activity loads.
+                 * @param {Object} activity - the full ActivityDTO from /api/activities/:id
+                 * @param {Object} flags - { hasElevation, hasHeartRate, hasSpeed, hasCadence, onFoot }
+                 */
+                function renderUnifiedActivityChart(activity, flags) {
+                    // Build the prepared per-metric series once. Each entry is an array of
+                    // {time, distance, value, trackPointIndex} objects in source order.
+                    const series = buildSeriesForChart(activity.trackPoints, flags);
+
+                    // Decimate each series independently for both axis modes. We cache both
+                    // so toggling Time ↔ Distance doesn't re-run LTTB.
+                    const decimated = {
+                        time: {},
+                        distance: {}
+                    };
+                    const targetBuckets = 800;
+                    Object.keys(series).forEach(metric => {
+                        const raw = series[metric];
+                        if (raw.length === 0) {
+                            decimated.time[metric] = [];
+                            decimated.distance[metric] = [];
+                            return;
                         }
+                        decimated.time[metric]     = lttbDecimate(raw, 'time', 'value', targetBuckets);
+                        decimated.distance[metric] = lttbDecimate(raw, 'distance', 'value', targetBuckets);
+                    });
 
-                        // Add point if it has elevation data
-                        if (point.elevation != null) {
-                            elevationData.push({
-                                distance: cumulativeDistance,
-                                elevation: point.elevation,
-                                trackPointIndex: i  // Store the original track point index
-                            });
-                        }
-                    }
+                    // Initial selection: every metric that has data is on by default.
+                    const enabled = {
+                        elevation: flags.hasElevation,
+                        heartRate: flags.hasHeartRate,
+                        pace:      flags.hasSpeed,
+                        cadence:   flags.hasCadence
+                    };
 
-                    if (elevationData.length > 0) {
-                        // Smooth elevation data to remove zero/invalid values
-                        const smoothedData = smoothElevationData(elevationData);
+                    // Default to the distance X-axis when the activity actually has GPS
+                    // distance data. Indoor / treadmill activities have no GPS so every
+                    // track point's cumulative distance stays 0 — defaulting to distance
+                    // there would render a degenerate single-X chart, so fall back to
+                    // time mode for those.
+                    const initialAxisMode = activityHasMeaningfulDistance(series) ? 'distance' : 'time';
 
-                        // Create throttled hover handler for elevation chart
-                        const elevationHoverHandler = throttle((event, activeElements) => {
-                            if (activeElements && activeElements.length > 0) {
-                                const dataIndex = activeElements[0].index;
-                                if (smoothedData[dataIndex]) {
-                                    updateMapMarker(smoothedData[dataIndex].trackPointIndex);
-                                }
-                            } else {
-                                hideMapMarker();
-                            }
-                        }, 50); // 50ms throttle
+                    activityChart_state = {
+                        activity:   activity,
+                        flags:      flags,
+                        series:     series,
+                        decimated:  decimated,
+                        enabled:    enabled,
+                        axisMode:   initialAxisMode,
+                        chart:      null
+                    };
 
-                        // Create elevation chart with hover interaction
-                        const ctx = document.getElementById('elevationChart').getContext('2d');
-                        new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: smoothedData.map(d => (d.distance / 1000).toFixed(2)),
-                                datasets: [{
-                                    label: 'Elevation (m)',
-                                    data: smoothedData.map(d => d.elevation),
-                                    borderColor: '#10b981',
-                                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                                    borderWidth: 2,
-                                    fill: true,
-                                    tension: 0.3,
-                                    pointRadius: 0,
-                                    pointHoverRadius: 0  // Disable hover radius for better performance
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                onHover: elevationHoverHandler,
-                                interaction: {
-                                    mode: 'nearest',
-                                    axis: 'x',
-                                    intersect: false
-                                },
-                                plugins: {
-                                    legend: {
-                                        display: false
-                                    },
-                                    tooltip: {
-                                        callbacks: {
-                                            title: (context) => {
-                                                return `Distance: ${context[0].label} km`;
-                                            },
-                                            label: (context) => {
-                                                return `Elevation: ${context.parsed.y.toFixed(1)} m`;
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    x: {
-                                        title: {
-                                            display: true,
-                                            text: 'Distance (km)'
-                                        }
-                                    },
-                                    y: {
-                                        title: {
-                                            display: true,
-                                            text: 'Elevation (m)'
-                                        }
-                                    }
-                                }
-                            }
-                        });
-                    }
+                    // Reflect the chosen default on the pill toggle so the active state
+                    // matches before the user has clicked anything.
+                    document.querySelectorAll('.activity-overview-chart__axis-toggle button').forEach(b => {
+                        b.classList.toggle('is-active', b.dataset.axis === initialAxisMode);
+                    });
+
+                    renderActivityChartCards();
+                    wireActivityChartControls();
+                    installActivityChartThemeListener();
+                    rebuildActivityChart();
                 }
 
                 /**
-                 * Smooth elevation data by interpolating zero/invalid values and applying moving average
-                 * @param {Array} data - Array of {distance, elevation, trackPointIndex} objects
-                 * @returns {Array} Smoothed elevation data
+                 * Returns true if any of the per-metric series carries non-trivial
+                 * cumulative distance — i.e. the activity has GPS data and the user
+                 * actually moved. Used to pick a sensible default X-axis mode.
                  */
-                function smoothElevationData(data) {
-                    if (data.length === 0) return data;
-
-                    // Step 1: Replace zeros and invalid values with interpolated values
-                    const interpolated = [...data];
-
-                    for (let i = 0; i < interpolated.length; i++) {
-                        if (interpolated[i].elevation === 0 || interpolated[i].elevation == null) {
-                            // Find previous valid value
-                            let prevIndex = i - 1;
-                            while (prevIndex >= 0 && (interpolated[prevIndex].elevation === 0 || interpolated[prevIndex].elevation == null)) {
-                                prevIndex--;
-                            }
-
-                            // Find next valid value
-                            let nextIndex = i + 1;
-                            while (nextIndex < interpolated.length && (interpolated[nextIndex].elevation === 0 || interpolated[nextIndex].elevation == null)) {
-                                nextIndex++;
-                            }
-
-                            // Interpolate between valid values
-                            if (prevIndex >= 0 && nextIndex < interpolated.length) {
-                                const prevElevation = interpolated[prevIndex].elevation;
-                                const nextElevation = interpolated[nextIndex].elevation;
-                                const ratio = (i - prevIndex) / (nextIndex - prevIndex);
-                                interpolated[i].elevation = prevElevation + (nextElevation - prevElevation) * ratio;
-                            } else if (prevIndex >= 0) {
-                                // Use previous value if no next value available
-                                interpolated[i].elevation = interpolated[prevIndex].elevation;
-                            } else if (nextIndex < interpolated.length) {
-                                // Use next value if no previous value available
-                                interpolated[i].elevation = interpolated[nextIndex].elevation;
+                function activityHasMeaningfulDistance(series) {
+                    const metrics = ['elevation', 'heartRate', 'pace', 'cadence'];
+                    for (const m of metrics) {
+                        const arr = series[m];
+                        if (arr && arr.length > 0) {
+                            const last = arr[arr.length - 1];
+                            if (last && last.distance > 0) {
+                                return true;
                             }
                         }
                     }
-
-                    // Step 2: Apply moving average smoothing (window size 5)
-                    const windowSize = 5;
-                    const smoothed = [];
-
-                    for (let i = 0; i < interpolated.length; i++) {
-                        const start = Math.max(0, i - Math.floor(windowSize / 2));
-                        const end = Math.min(interpolated.length, i + Math.ceil(windowSize / 2));
-
-                        let sum = 0;
-                        let count = 0;
-
-                        for (let j = start; j < end; j++) {
-                            if (interpolated[j].elevation != null && interpolated[j].elevation !== 0) {
-                                sum += interpolated[j].elevation;
-                                count++;
-                            }
-                        }
-
-                        smoothed.push({
-                            distance: interpolated[i].distance,
-                            elevation: count > 0 ? sum / count : interpolated[i].elevation,
-                            trackPointIndex: interpolated[i].trackPointIndex  // Preserve track point index
-                        });
-                    }
-
-                    return smoothed;
+                    return false;
                 }
 
                 /**
-                 * Update the hover marker position on the map
-                 * @param {number} trackPointIndex - Index of the track point to show
-                 */
-                function updateMapMarker(trackPointIndex) {
-                    if (!activityMap || !hoverMarker || !currentTrackPoints) return;
-
-                    const point = currentTrackPoints[trackPointIndex];
-                    if (point && point.latitude != null && point.longitude != null) {
-                        hoverMarker.setLatLng([point.latitude, point.longitude]);
-                        hoverMarker.setOpacity(1);
-                    }
-                }
-
-                /**
-                 * Hide the hover marker on the map
-                 */
-                function hideMapMarker() {
-                    if (hoverMarker) {
-                        hoverMarker.setOpacity(0);
-                    }
-                }
-
-                /**
-                 * Format elapsed time in minutes to mm:ss or hh:mm:ss
-                 * @param {number} minutes - Elapsed time in decimal minutes
-                 * @param {number} totalMinutes - Total duration in minutes (to determine if hours are needed)
-                 * @returns {string} Formatted time string
-                 */
-                function formatElapsedTime(minutes, totalMinutes) {
-                    const totalSeconds = Math.floor(minutes * 60);
-                    const hours = Math.floor(totalSeconds / 3600);
-                    const mins = Math.floor((totalSeconds % 3600) / 60);
-                    const secs = totalSeconds % 60;
-
-                    // Use hh:mm:ss format if total duration is 1 hour or more
-                    if (totalMinutes >= 60) {
-                        return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                    } else {
-                        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-                    }
-                }
-
-                /**
-                 * Render heart rate chart over time
-                 * @param {Array} trackPoints - Array of track point objects
-                 */
-                function renderHeartRateChart(trackPoints) {
-                    // Calculate elapsed time and prepare heart rate data
-                    const heartRateData = [];
-                    let startTime = null;
-
-                    for (let i = 0; i < trackPoints.length; i++) {
-                        const point = trackPoints[i];
-
-                        if (point.heartRate != null && point.heartRate > 0) {
-                            // Parse timestamp
-                            const timestamp = new Date(point.timestamp);
-
-                            if (startTime === null) {
-                                startTime = timestamp;
-                            }
-
-                            // Calculate elapsed time in minutes
-                            const elapsedMinutes = (timestamp - startTime) / 1000 / 60;
-
-                            heartRateData.push({
-                                time: elapsedMinutes,
-                                heartRate: point.heartRate,
-                                trackPointIndex: i  // Store the original track point index
-                            });
-                        }
-                    }
-
-                    if (heartRateData.length > 0) {
-                        // Calculate total duration to determine time format
-                        const totalMinutes = heartRateData[heartRateData.length - 1].time;
-
-                        // Create throttled hover handler for heart rate chart
-                        const heartRateHoverHandler = throttle((event, activeElements) => {
-                            if (activeElements && activeElements.length > 0) {
-                                const dataIndex = activeElements[0].index;
-                                if (heartRateData[dataIndex]) {
-                                    updateMapMarker(heartRateData[dataIndex].trackPointIndex);
-                                }
-                            } else {
-                                hideMapMarker();
-                            }
-                        }, 50); // 50ms throttle
-
-                        // Create heart rate chart using Chart.js
-                        const ctx = document.getElementById('heartRateChart').getContext('2d');
-                        new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: heartRateData.map(d => formatElapsedTime(d.time, totalMinutes)),
-                                datasets: [{
-                                    label: 'Heart Rate (bpm)',
-                                    data: heartRateData.map(d => d.heartRate),
-                                    borderColor: 'rgb(220, 53, 69)',
-                                    backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                                    borderWidth: 2,
-                                    fill: true,
-                                    tension: 0.3,
-                                    pointRadius: 0,
-                                    pointHoverRadius: 0  // Disable hover radius for better performance
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                onHover: heartRateHoverHandler,
-                                plugins: {
-                                    legend: {
-                                        display: false
-                                    },
-                                    tooltip: {
-                                        mode: 'index',
-                                        intersect: false,
-                                        callbacks: {
-                                            title: function(context) {
-                                                return 'Time: ' + context[0].label;
-                                            },
-                                            label: function(context) {
-                                                return context.parsed.y + ' bpm';
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    x: {
-                                        title: {
-                                            display: true,
-                                            text: 'Time'
-                                        },
-                                        ticks: {
-                                            maxTicksLimit: 10
-                                        }
-                                    },
-                                    y: {
-                                        title: {
-                                            display: true,
-                                            text: 'Heart Rate (bpm)'
-                                        },
-                                        beginAtZero: false
-                                    }
-                                },
-                                interaction: {
-                                    mode: 'nearest',
-                                    axis: 'x',
-                                    intersect: false
-                                }
-                            }
-                        });
-                    }
-                }
-
-                /**
-                 * Render cadence chart over time. Sport-aware: foot activities are labelled
-                 * "spm" (steps per minute), cycling and other sports are labelled "rpm".
-                 * The stored per-point values are already in the right unit thanks to the
-                 * parser normalisation in FitParser/GpxParser, so this function just picks
-                 * the axis label and chart title accordingly.
+                 * Listen for OS-level light/dark mode changes and rebuild the chart so
+                 * its canvas-rendered colors stay in sync with the CSS variables. The
+                 * surrounding cards / header / cards-grid update automatically because
+                 * they're driven by CSS custom properties under the same media query;
+                 * only the canvas itself needs an explicit redraw because Chart.js
+                 * captures color values at chart-build time.
                  *
-                 * @param {Array} trackPoints - Array of track point objects
-                 * @param {boolean} onFoot - True for foot sports (run/walk/hike/mountaineering)
+                 * Idempotent — only installs the listener once per page load even if
+                 * the chart entry point ever ends up being called multiple times.
                  */
-                function renderCadenceChart(trackPoints, onFoot) {
-                    const unit = onFoot ? 'spm' : 'rpm';
-                    const axisLabel = onFoot ? 'Cadence (spm)' : 'Cadence (rpm)';
-
-                    // Reflect the unit in the card header so the chart title matches the axis.
-                    const titleEl = document.getElementById('cadenceChartTitle');
-                    if (titleEl) {
-                        titleEl.innerHTML = '<i class="bi bi-arrow-repeat"></i> Cadence (' + unit + ')';
+                function installActivityChartThemeListener() {
+                    if (window._activityChartThemeListenerInstalled) return;
+                    window._activityChartThemeListenerInstalled = true;
+                    if (!window.matchMedia) return;
+                    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+                    const handler = () => {
+                        if (activityChart_state) {
+                            rebuildActivityChart();
+                        }
+                    };
+                    // Modern browsers expose addEventListener; older Safari only has
+                    // the deprecated addListener. Support both so the chart updates
+                    // smoothly across the whole desktop range FitPub targets.
+                    if (mql.addEventListener) {
+                        mql.addEventListener('change', handler);
+                    } else if (mql.addListener) {
+                        mql.addListener(handler);
                     }
+                }
 
-                    // Walk the points once, building (elapsedMinutes, cadence) pairs and
-                    // remembering the source track point index so the map marker hover
-                    // integration works the same way as the heart rate chart.
-                    const cadenceData = [];
+                /**
+                 * Walk the trackPoints once and assemble per-metric source arrays. Each
+                 * point gets a (time-since-start-in-seconds, cumulative-distance-in-km)
+                 * pair so both axis modes share the same upstream data and we only
+                 * iterate the points once.
+                 */
+                function buildSeriesForChart(trackPoints, flags) {
+                    const elevation = [];
+                    const heartRate = [];
+                    const pace      = [];
+                    const cadence   = [];
+
                     let startTime = null;
+                    let cumulativeMeters = 0;
+                    let lastLat = null;
+                    let lastLon = null;
+
                     for (let i = 0; i < trackPoints.length; i++) {
-                        const point = trackPoints[i];
-                        if (point.cadence != null && point.cadence > 0) {
-                            const timestamp = new Date(point.timestamp);
-                            if (startTime === null) {
-                                startTime = timestamp;
+                        const p = trackPoints[i];
+                        if (!p.timestamp) continue;
+
+                        const t = new Date(p.timestamp).getTime();
+                        if (startTime === null) startTime = t;
+                        const elapsedSeconds = (t - startTime) / 1000;
+
+                        if (p.latitude != null && p.longitude != null) {
+                            if (lastLat != null && lastLon != null) {
+                                cumulativeMeters += calculateDistance(lastLat, lastLon, p.latitude, p.longitude);
                             }
-                            const elapsedMinutes = (timestamp - startTime) / 1000 / 60;
-                            cadenceData.push({
-                                time: elapsedMinutes,
-                                cadence: point.cadence,
-                                trackPointIndex: i
+                            lastLat = p.latitude;
+                            lastLon = p.longitude;
+                        }
+                        const distanceKm = cumulativeMeters / 1000;
+
+                        if (flags.hasElevation && p.elevation != null) {
+                            elevation.push({ time: elapsedSeconds, distance: distanceKm, value: p.elevation, trackPointIndex: i });
+                        }
+                        if (flags.hasHeartRate && p.heartRate != null && p.heartRate > 0) {
+                            heartRate.push({ time: elapsedSeconds, distance: distanceKm, value: p.heartRate, trackPointIndex: i });
+                        }
+                        if (flags.hasSpeed && p.speed != null && p.speed > 0) {
+                            // pace = 60 / (km/h). Clamp to 2:00–20:00 min/km so a single
+                            // GPS-drift "0.1 km/h" sample doesn't blow the axis range.
+                            const rawPace = 60 / p.speed;
+                            const clampedPace = Math.max(2, Math.min(20, rawPace));
+                            pace.push({ time: elapsedSeconds, distance: distanceKm, value: clampedPace, trackPointIndex: i });
+                        }
+                        if (flags.hasCadence && p.cadence != null && p.cadence > 0) {
+                            cadence.push({ time: elapsedSeconds, distance: distanceKm, value: p.cadence, trackPointIndex: i });
+                        }
+                    }
+
+                    return { elevation: elevation, heartRate: heartRate, pace: pace, cadence: cadence };
+                }
+
+                /**
+                 * Largest-Triangle-Three-Buckets decimation. Operates on an array of
+                 * {[xKey], [yKey], trackPointIndex} objects and returns a new array
+                 * of the same shape with `threshold` (or fewer) elements. Preserves
+                 * the first and last point exactly. Standard implementation —
+                 * Sveinn Steinarsson 2013, used by uPlot, Highcharts, etc.
+                 */
+                function lttbDecimate(data, xKey, yKey, threshold) {
+                    const dataLength = data.length;
+                    if (threshold >= dataLength || threshold <= 2) {
+                        return data.slice();
+                    }
+                    const sampled = [];
+                    const bucketSize = (dataLength - 2) / (threshold - 2);
+                    let a = 0;
+                    sampled.push(data[a]);
+
+                    for (let i = 0; i < threshold - 2; i++) {
+                        // Average of next bucket (used as "C")
+                        let avgX = 0;
+                        let avgY = 0;
+                        let avgRangeStart = Math.floor((i + 1) * bucketSize) + 1;
+                        let avgRangeEnd = Math.floor((i + 2) * bucketSize) + 1;
+                        avgRangeEnd = avgRangeEnd < dataLength ? avgRangeEnd : dataLength;
+                        const avgRangeLength = avgRangeEnd - avgRangeStart;
+                        for (let j = avgRangeStart; j < avgRangeEnd; j++) {
+                            avgX += data[j][xKey];
+                            avgY += data[j][yKey];
+                        }
+                        avgX /= avgRangeLength;
+                        avgY /= avgRangeLength;
+
+                        // Range of this bucket — pick the point that maximises the
+                        // triangle area with A and C.
+                        const rangeOffs = Math.floor(i * bucketSize) + 1;
+                        const rangeTo = Math.floor((i + 1) * bucketSize) + 1;
+                        const pointAX = data[a][xKey];
+                        const pointAY = data[a][yKey];
+                        let maxArea = -1;
+                        let nextA = rangeOffs;
+                        for (let j = rangeOffs; j < rangeTo; j++) {
+                            const area = Math.abs(
+                                (pointAX - avgX) * (data[j][yKey] - pointAY) -
+                                (pointAX - data[j][xKey]) * (avgY - pointAY)
+                            ) * 0.5;
+                            if (area > maxArea) {
+                                maxArea = area;
+                                nextA = j;
+                            }
+                        }
+                        sampled.push(data[nextA]);
+                        a = nextA;
+                    }
+
+                    sampled.push(data[dataLength - 1]);
+                    return sampled;
+                }
+
+                /**
+                 * Render the metric cards above the chart. Each card is a button-like
+                 * div carrying a data-metric attribute that the click handler reads.
+                 */
+                function renderActivityChartCards() {
+                    const s = activityChart_state;
+                    const cards = [];
+                    if (s.flags.hasElevation) {
+                        cards.push(buildMetricCardHtml('elevation', 'Elevation', formatElevationSummary(s.activity), 'gain over activity'));
+                    }
+                    if (s.flags.hasHeartRate) {
+                        cards.push(buildMetricCardHtml('heartRate', 'Heart Rate', formatHeartRateSummary(s.activity), s.activity.maxHeartRate ? ('avg · max ' + Math.round(s.activity.maxHeartRate)) : 'avg'));
+                    }
+                    if (s.flags.hasSpeed) {
+                        cards.push(buildMetricCardHtml('pace', 'Pace', formatPaceSummary(s.activity), 'avg min/km'));
+                    }
+                    if (s.flags.hasCadence) {
+                        const unit = s.flags.onFoot ? 'spm' : 'rpm';
+                        cards.push(buildMetricCardHtml('cadence', 'Cadence', formatCadenceSummary(s.activity, unit), 'avg ' + unit));
+                    }
+                    document.getElementById('activityOverviewChartCards').innerHTML = cards.join('');
+                }
+
+                function buildMetricCardHtml(metric, label, value, secondary) {
+                    const isActive = activityChart_state.enabled[metric];
+                    return `
+                        <div class="activity-overview-chart__card ${isActive ? 'is-active' : ''}" data-metric="${metric}">
+                            <div class="activity-overview-chart__card-header">
+                                <span class="activity-overview-chart__card-label">
+                                    <span class="activity-overview-chart__card-dot"></span>${label}
+                                </span>
+                                <span class="activity-overview-chart__card-check">${isActive ? '✓' : ''}</span>
+                            </div>
+                            <div class="activity-overview-chart__card-value">${value}</div>
+                            <div class="activity-overview-chart__card-secondary">${secondary}</div>
+                        </div>
+                    `;
+                }
+
+                function formatElevationSummary(activity) {
+                    if (activity.elevationGain == null) return '—';
+                    return Math.round(activity.elevationGain) + ' m';
+                }
+                function formatHeartRateSummary(activity) {
+                    if (activity.averageHeartRate == null) return '—';
+                    return Math.round(activity.averageHeartRate) + ' bpm';
+                }
+                function formatPaceSummary(activity) {
+                    if (activity.averageSpeed == null || activity.averageSpeed <= 0) return '—';
+                    return formatPaceMinSec(60 / activity.averageSpeed) + ' min/km';
+                }
+                function formatCadenceSummary(activity, unit) {
+                    if (activity.averageCadence == null) return '—';
+                    return Math.round(activity.averageCadence) + ' ' + unit;
+                }
+                function formatPaceMinSec(decimalMinutes) {
+                    if (!isFinite(decimalMinutes) || decimalMinutes <= 0) return '—';
+                    const totalSeconds = Math.round(decimalMinutes * 60);
+                    const m = Math.floor(totalSeconds / 60);
+                    const s = totalSeconds % 60;
+                    return m + ':' + s.toString().padStart(2, '0');
+                }
+
+                /**
+                 * One-time wire-up for the metric card clicks and the axis toggle.
+                 * Click handlers re-read state from activityChart_state on every event,
+                 * so they don't need re-binding when the cards re-render.
+                 */
+                function wireActivityChartControls() {
+                    const cardsContainer = document.getElementById('activityOverviewChartCards');
+                    cardsContainer.addEventListener('click', (e) => {
+                        const card = e.target.closest('.activity-overview-chart__card');
+                        if (!card) return;
+                        const metric = card.dataset.metric;
+                        const s = activityChart_state;
+
+                        // Prevent deselecting the last enabled metric.
+                        const enabledCount = Object.values(s.enabled).filter(Boolean).length;
+                        if (s.enabled[metric] && enabledCount === 1) {
+                            return;
+                        }
+
+                        s.enabled[metric] = !s.enabled[metric];
+                        renderActivityChartCards();
+                        rebuildActivityChart();
+                    });
+
+                    document.querySelectorAll('.activity-overview-chart__axis-toggle button').forEach(btn => {
+                        btn.addEventListener('click', () => {
+                            const mode = btn.dataset.axis;
+                            if (activityChart_state.axisMode === mode) return;
+                            activityChart_state.axisMode = mode;
+                            document.querySelectorAll('.activity-overview-chart__axis-toggle button').forEach(b => {
+                                b.classList.toggle('is-active', b.dataset.axis === mode);
                             });
+                            rebuildActivityChart();
+                        });
+                    });
+                }
+
+                /**
+                 * Resolve the chart's theme-dependent color values from the live computed
+                 * styles on the chart container. This way the JS-side theme stays in
+                 * lockstep with the CSS @media (prefers-color-scheme: dark) override —
+                 * if FitPub ever adds a manual theme toggle that flips the CSS variables
+                 * via a class on the body, the chart picks it up automatically.
+                 */
+                function readActivityChartTheme() {
+                    const root = document.getElementById('activityOverviewChart');
+                    if (!root) {
+                        // Fallback to light defaults if the element isn't in the DOM yet.
+                        return {
+                            elevation: '#0099b3',
+                            elevationFill: 'rgba(0, 153, 179, 0.18)',
+                            heartRate: '#d63450',
+                            pace:      '#5b48d6',
+                            cadence:   '#d97706',
+                            text:      '#1a0033',
+                            textMuted: '#6b5b80',
+                            grid:      'rgba(26, 0, 51, 0.08)',
+                            tooltipBg: '#ffffff',
+                            tooltipBorder: '#e2d6ee'
+                        };
+                    }
+                    const styles = getComputedStyle(root);
+                    const get = (name, fallback) => (styles.getPropertyValue(name).trim() || fallback);
+                    const elevationLine = get('--aoc-elevation', '#0099b3');
+                    return {
+                        elevation:     elevationLine,
+                        // Build a translucent fill from the same line color so light/dark
+                        // both get an appropriately-faded area below the elevation line.
+                        elevationFill: hexToRgba(elevationLine, 0.18),
+                        heartRate:     get('--aoc-heart-rate', '#d63450'),
+                        pace:          get('--aoc-pace', '#5b48d6'),
+                        cadence:       get('--aoc-cadence', '#d97706'),
+                        text:          get('--aoc-text', '#1a0033'),
+                        textMuted:     get('--aoc-text-muted', '#6b5b80'),
+                        grid:          get('--aoc-grid', 'rgba(26, 0, 51, 0.08)'),
+                        tooltipBg:     get('--aoc-surface', '#f7f3fb'),
+                        tooltipBorder: get('--aoc-border', '#e2d6ee')
+                    };
+                }
+
+                /**
+                 * Convert a 3- or 6-digit hex color to an rgba() string with the given alpha.
+                 * Returns the input untouched if it doesn't look like a hex string (e.g. if
+                 * the CSS variable was already a non-hex value).
+                 */
+                function hexToRgba(hex, alpha) {
+                    if (!hex || typeof hex !== 'string') return hex;
+                    const trimmed = hex.trim();
+                    let r, g, b;
+                    if (/^#([0-9a-f]{6})$/i.test(trimmed)) {
+                        r = parseInt(trimmed.slice(1, 3), 16);
+                        g = parseInt(trimmed.slice(3, 5), 16);
+                        b = parseInt(trimmed.slice(5, 7), 16);
+                    } else if (/^#([0-9a-f]{3})$/i.test(trimmed)) {
+                        r = parseInt(trimmed[1] + trimmed[1], 16);
+                        g = parseInt(trimmed[2] + trimmed[2], 16);
+                        b = parseInt(trimmed[3] + trimmed[3], 16);
+                    } else {
+                        return trimmed;
+                    }
+                    return 'rgba(' + r + ',' + g + ',' + b + ',' + alpha + ')';
+                }
+
+                /**
+                 * Tear down the existing Chart.js instance (if any) and build a new one
+                 * from the current state. Also rewrites the legend HTML.
+                 */
+                function rebuildActivityChart() {
+                    const s = activityChart_state;
+                    if (s.chart) {
+                        s.chart.destroy();
+                        s.chart = null;
+                    }
+
+                    // Resolved from the live CSS so the chart matches the active theme
+                    // (light by default, dark via @media (prefers-color-scheme: dark)).
+                    const theme = readActivityChartTheme();
+                    const colors = {
+                        elevation: theme.elevation,
+                        heartRate: theme.heartRate,
+                        pace:      theme.pace,
+                        cadence:   theme.cadence
+                    };
+                    const labels = {
+                        elevation: 'Elevation (m)',
+                        heartRate: 'Heart Rate (bpm)',
+                        pace:      'Pace (min/km)',
+                        cadence:   'Cadence (' + (s.flags.onFoot ? 'spm' : 'rpm') + ')'
+                    };
+
+                    const xKey = s.axisMode === 'time' ? 'time' : 'distance';
+                    const xAxisTitle = s.axisMode === 'time' ? 'Time' : 'Distance (km)';
+
+                    // Build datasets only for enabled metrics that actually have data.
+                    // Each dataset stores {x, y} pairs (the format Chart.js expects); the
+                    // mapping back to the original track-point index for each plotted point
+                    // is kept in a parallel `tpiByDataset` array indexed by [datasetIndex][i]
+                    // so the hover handler doesn't depend on Chart.js preserving custom
+                    // fields through its parsing pipeline.
+                    const datasets = [];
+                    const tpiByDataset = [];
+                    const yScales = {};
+                    const visibleMetricsForLegend = [];
+
+                    // Track the global X-axis range across all visible series so we can
+                    // pin the X-axis to the actual data extent (no whitespace at the edges).
+                    let xMin = Infinity;
+                    let xMax = -Infinity;
+
+                    function pushDataset(metric, label, data, color, fill, fillColor, axisId, axisOpts) {
+                        const xy = data.map(d => ({ x: d[xKey], y: d.value }));
+                        if (xy.length > 0) {
+                            if (xy[0].x < xMin) xMin = xy[0].x;
+                            if (xy[xy.length - 1].x > xMax) xMax = xy[xy.length - 1].x;
                         }
+                        datasets.push({
+                            label: label,
+                            data: xy,
+                            borderColor: color,
+                            backgroundColor: fillColor,
+                            yAxisID: axisId,
+                            borderWidth: 1.5,
+                            fill: fill,
+                            tension: 0,
+                            pointRadius: 0,
+                            pointHoverRadius: 4,
+                            metricKey: metric
+                        });
+                        tpiByDataset.push(data.map(d => d.trackPointIndex));
                     }
 
-                    if (cadenceData.length === 0) {
-                        return;
+                    if (s.enabled.elevation && s.decimated[s.axisMode].elevation.length > 0) {
+                        pushDataset('elevation', labels.elevation, s.decimated[s.axisMode].elevation,
+                                    colors.elevation, true, theme.elevationFill, 'yElevation');
+                        yScales.yElevation = makeYAxis('elevation', colors.elevation, 'left', false, null, theme.grid);
+                        visibleMetricsForLegend.push({ key: 'elevation', label: 'Elevation', color: colors.elevation });
+                    }
+                    if (s.enabled.heartRate && s.decimated[s.axisMode].heartRate.length > 0) {
+                        pushDataset('heartRate', labels.heartRate, s.decimated[s.axisMode].heartRate,
+                                    colors.heartRate, false, 'transparent', 'yHeartRate');
+                        yScales.yHeartRate = makeYAxis('heartRate', colors.heartRate, 'right', false, { min: 50, max: 210 }, theme.grid);
+                        visibleMetricsForLegend.push({ key: 'heartRate', label: 'Heart Rate', color: colors.heartRate });
+                    }
+                    if (s.enabled.pace && s.decimated[s.axisMode].pace.length > 0) {
+                        pushDataset('pace', labels.pace, s.decimated[s.axisMode].pace,
+                                    colors.pace, false, 'transparent', 'yPace');
+                        yScales.yPace = makeYAxis('pace', colors.pace, 'right', true, null, theme.grid);
+                        visibleMetricsForLegend.push({ key: 'pace', label: 'Pace', color: colors.pace });
+                    }
+                    if (s.enabled.cadence && s.decimated[s.axisMode].cadence.length > 0) {
+                        pushDataset('cadence', labels.cadence, s.decimated[s.axisMode].cadence,
+                                    colors.cadence, false, 'transparent', 'yCadence');
+                        yScales.yCadence = makeYAxis('cadence', colors.cadence, 'left', false, { min: 60, max: 220 }, theme.grid);
+                        visibleMetricsForLegend.push({ key: 'cadence', label: labels.cadence.replace(' (spm)', '').replace(' (rpm)', ''), color: colors.cadence });
                     }
 
-                    const totalMinutes = cadenceData[cadenceData.length - 1].time;
+                    renderActivityChartLegend(visibleMetricsForLegend);
 
-                    const cadenceHoverHandler = throttle((event, activeElements) => {
+                    // Fall back to a sensible 0..1 range if no datasets ended up populated
+                    // (defensive — the caller already checks that at least one metric has
+                    // data before invoking us).
+                    if (!isFinite(xMin) || !isFinite(xMax)) {
+                        xMin = 0;
+                        xMax = 1;
+                    }
+
+                    // Hover handler — look up the trackPointIndex via the parallel array
+                    // so we don't depend on Chart.js preserving any custom fields on the
+                    // raw data points.
+                    const hoverHandler = throttle((event, activeElements) => {
                         if (activeElements && activeElements.length > 0) {
-                            const dataIndex = activeElements[0].index;
-                            if (cadenceData[dataIndex]) {
-                                updateMapMarker(cadenceData[dataIndex].trackPointIndex);
+                            const el = activeElements[0];
+                            const dsTpi = tpiByDataset[el.datasetIndex];
+                            const tpi = dsTpi ? dsTpi[el.index] : null;
+                            if (tpi != null) {
+                                updateMapMarker(tpi);
+                                return;
                             }
-                        } else {
-                            hideMapMarker();
                         }
+                        hideMapMarker();
                     }, 50);
 
-                    const ctx = document.getElementById('cadenceChart').getContext('2d');
-                    new Chart(ctx, {
+                    const ctx = document.getElementById('activityOverviewChartCanvas').getContext('2d');
+                    s.chart = new Chart(ctx, {
                         type: 'line',
-                        data: {
-                            labels: cadenceData.map(d => formatElapsedTime(d.time, totalMinutes)),
-                            datasets: [{
-                                label: axisLabel,
-                                data: cadenceData.map(d => d.cadence),
-                                borderColor: 'rgb(13, 110, 253)',
-                                backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                                borderWidth: 2,
-                                fill: true,
-                                tension: 0.3,
-                                pointRadius: 0,
-                                pointHoverRadius: 0
-                            }]
-                        },
+                        data: { datasets: datasets },
                         options: {
                             responsive: true,
-                            maintainAspectRatio: true,
-                            onHover: cadenceHoverHandler,
+                            maintainAspectRatio: false,
+                            animation: false,
+                            onHover: hoverHandler,
+                            // Single source of truth for hover/tooltip behaviour: vertical
+                            // crosshair across all visible datasets at the nearest X. Both
+                            // tooltip and onHover inherit from this `interaction` config.
+                            interaction: {
+                                mode: 'index',
+                                axis: 'x',
+                                intersect: false
+                            },
                             plugins: {
-                                legend: {
-                                    display: false
-                                },
+                                legend: { display: false },
                                 tooltip: {
-                                    mode: 'index',
-                                    intersect: false,
+                                    enabled: true,
+                                    backgroundColor: theme.tooltipBg,
+                                    borderColor: theme.tooltipBorder,
+                                    borderWidth: 1,
+                                    titleColor: theme.text,
+                                    bodyColor: theme.text,
                                     callbacks: {
-                                        title: function(context) {
-                                            return 'Time: ' + context[0].label;
+                                        title: function(items) {
+                                            if (!items.length) return '';
+                                            const x = items[0].parsed.x;
+                                            return s.axisMode === 'time'
+                                                ? formatElapsedSeconds(x)
+                                                : x.toFixed(2) + ' km';
                                         },
-                                        label: function(context) {
-                                            return context.parsed.y + ' ' + unit;
+                                        label: function(ctx) {
+                                            const ds = ctx.dataset;
+                                            const y = ctx.parsed.y;
+                                            if (ds.metricKey === 'pace') {
+                                                return ds.label.replace(' (min/km)', '') + ': ' + formatPaceMinSec(y) + ' min/km';
+                                            }
+                                            return ds.label + ': ' + Math.round(y);
                                         }
                                     }
                                 }
                             },
-                            scales: {
+                            scales: Object.assign({
                                 x: {
-                                    title: {
-                                        display: true,
-                                        text: 'Time'
-                                    },
+                                    type: 'linear',
+                                    // Pin the axis to the actual data extent so the chart
+                                    // doesn't pad out to a "nice" round number (a 4.5 km run
+                                    // would otherwise show empty space out to 5 km).
+                                    min: xMin,
+                                    max: xMax,
+                                    bounds: 'data',
+                                    offset: false,
+                                    title: { display: true, text: xAxisTitle, color: theme.textMuted },
                                     ticks: {
-                                        maxTicksLimit: 10
-                                    }
-                                },
-                                y: {
-                                    title: {
-                                        display: true,
-                                        text: axisLabel
+                                        color: theme.textMuted,
+                                        maxTicksLimit: 8,
+                                        callback: function(value) {
+                                            return s.axisMode === 'time'
+                                                ? formatElapsedSeconds(value)
+                                                : value.toFixed(1);
+                                        }
                                     },
-                                    beginAtZero: false
+                                    grid: { color: theme.grid }
                                 }
-                            },
-                            interaction: {
-                                mode: 'nearest',
-                                axis: 'x',
-                                intersect: false
-                            }
+                            }, yScales)
                         }
                     });
                 }
 
                 /**
-                 * Render speed/pace chart over time
-                 * @param {Array} trackPoints - Array of track point objects
+                 * Build a Y-axis scale config for one metric. Pace gets reversed
+                 * (lower = faster = top of axis) and uses M:SS tick callbacks.
+                 * The grid color is supplied by the caller so it stays in sync with
+                 * the active theme (light vs dark).
                  */
-                function renderSpeedChart(trackPoints) {
-                    // Calculate elapsed time and prepare speed data
-                    const speedData = [];
-                    let startTime = null;
-
-                    for (let i = 0; i < trackPoints.length; i++) {
-                        const point = trackPoints[i];
-
-                        if (point.speed != null && point.speed > 0) {
-                            // Parse timestamp
-                            const timestamp = new Date(point.timestamp);
-
-                            if (startTime === null) {
-                                startTime = timestamp;
+                function makeYAxis(metric, color, position, reverse, fixedRange, gridColor) {
+                    const scale = {
+                        type: 'linear',
+                        position: position,
+                        reverse: !!reverse,
+                        title: { display: false },
+                        ticks: {
+                            color: color,
+                            callback: function(value) {
+                                if (metric === 'pace') {
+                                    return formatPaceMinSec(value);
+                                }
+                                return Math.round(value);
                             }
-
-                            // Calculate elapsed time in minutes
-                            const elapsedMinutes = (timestamp - startTime) / 1000 / 60;
-
-                            // Speed is already in km/h from the FIT parser (converted during parsing)
-                            const speedKmh = point.speed;
-
-                            speedData.push({
-                                time: elapsedMinutes,
-                                speed: speedKmh,
-                                trackPointIndex: i  // Store the original track point index
-                            });
+                        },
+                        grid: {
+                            display: position === 'left',
+                            color: gridColor,
+                            drawOnChartArea: position === 'left'
                         }
+                    };
+                    if (fixedRange) {
+                        if (fixedRange.min != null) scale.min = fixedRange.min;
+                        if (fixedRange.max != null) scale.max = fixedRange.max;
                     }
+                    return scale;
+                }
 
-                    if (speedData.length > 0) {
-                        // Apply moving average smoothing to speed data (window size 5)
-                        const smoothedSpeedData = smoothSpeedData(speedData);
-
-                        // Calculate total duration to determine time format
-                        const totalMinutes = smoothedSpeedData[smoothedSpeedData.length - 1].time;
-
-                        // Create throttled hover handler for speed chart
-                        const speedHoverHandler = throttle((event, activeElements) => {
-                            if (activeElements && activeElements.length > 0) {
-                                const dataIndex = activeElements[0].index;
-                                if (smoothedSpeedData[dataIndex]) {
-                                    updateMapMarker(smoothedSpeedData[dataIndex].trackPointIndex);
-                                }
-                            } else {
-                                hideMapMarker();
-                            }
-                        }, 50); // 50ms throttle
-
-                        // Create speed chart using Chart.js
-                        const ctx = document.getElementById('speedChart').getContext('2d');
-                        new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: smoothedSpeedData.map(d => formatElapsedTime(d.time, totalMinutes)),
-                                datasets: [{
-                                    label: 'Speed (km/h)',
-                                    data: smoothedSpeedData.map(d => d.speed),
-                                    borderColor: 'rgb(13, 110, 253)',
-                                    backgroundColor: 'rgba(13, 110, 253, 0.1)',
-                                    borderWidth: 2,
-                                    fill: true,
-                                    tension: 0.3,
-                                    pointRadius: 0,
-                                    pointHoverRadius: 0  // Disable hover radius for better performance
-                                }]
-                            },
-                            options: {
-                                responsive: true,
-                                maintainAspectRatio: true,
-                                onHover: speedHoverHandler,
-                                plugins: {
-                                    legend: {
-                                        display: false
-                                    },
-                                    tooltip: {
-                                        mode: 'index',
-                                        intersect: false,
-                                        callbacks: {
-                                            title: function(context) {
-                                                return 'Time: ' + context[0].label;
-                                            },
-                                            label: function(context) {
-                                                const speedKmh = context.parsed.y;
-                                                // Calculate pace (min/km)
-                                                const paceMinPerKm = speedKmh > 0 ? 60 / speedKmh : 0;
-                                                const paceMin = Math.floor(paceMinPerKm);
-                                                const paceSec = Math.round((paceMinPerKm - paceMin) * 60);
-                                                return `${speedKmh.toFixed(1)} km/h (${paceMin}:${paceSec.toString().padStart(2, '0')} /km)`;
-                                            }
-                                        }
-                                    }
-                                },
-                                scales: {
-                                    x: {
-                                        title: {
-                                            display: true,
-                                            text: 'Time'
-                                        },
-                                        ticks: {
-                                            maxTicksLimit: 10
-                                        }
-                                    },
-                                    y: {
-                                        title: {
-                                            display: true,
-                                            text: 'Speed (km/h)'
-                                        },
-                                        beginAtZero: true
-                                    }
-                                },
-                                interaction: {
-                                    mode: 'nearest',
-                                    axis: 'x',
-                                    intersect: false
-                                }
-                            }
-                        });
-                    }
+                function renderActivityChartLegend(items) {
+                    const html = items.map(it => `
+                        <span class="activity-overview-chart__legend-item">
+                            <span class="activity-overview-chart__legend-bar" style="background:${it.color}"></span>
+                            ${it.label}
+                        </span>
+                    `).join('');
+                    document.getElementById('activityOverviewChartLegend').innerHTML = html;
                 }
 
                 /**
-                 * Smooth speed data by applying moving average
-                 * @param {Array} data - Array of {time, speed, trackPointIndex} objects
-                 * @returns {Array} Smoothed speed data
+                 * Format elapsed seconds as H:MM:SS (or M:SS if under an hour).
                  */
-                function smoothSpeedData(data) {
-                    if (data.length === 0) return data;
-
-                    const windowSize = 5;
-                    const smoothed = [];
-
-                    for (let i = 0; i < data.length; i++) {
-                        const start = Math.max(0, i - Math.floor(windowSize / 2));
-                        const end = Math.min(data.length, i + Math.ceil(windowSize / 2));
-
-                        let sum = 0;
-                        let count = 0;
-
-                        for (let j = start; j < end; j++) {
-                            if (data[j].speed > 0) {
-                                sum += data[j].speed;
-                                count++;
-                            }
-                        }
-
-                        smoothed.push({
-                            time: data[i].time,
-                            speed: count > 0 ? sum / count : data[i].speed,
-                            trackPointIndex: data[i].trackPointIndex  // Preserve track point index
-                        });
+                function formatElapsedSeconds(seconds) {
+                    if (!isFinite(seconds) || seconds < 0) return '0:00';
+                    const total = Math.floor(seconds);
+                    const h = Math.floor(total / 3600);
+                    const m = Math.floor((total % 3600) / 60);
+                    const sec = total % 60;
+                    if (h > 0) {
+                        return h + ':' + m.toString().padStart(2, '0') + ':' + sec.toString().padStart(2, '0');
                     }
-
-                    return smoothed;
+                    return m + ':' + sec.toString().padStart(2, '0');
                 }
 
                 // Haversine formula to calculate distance between two GPS points
