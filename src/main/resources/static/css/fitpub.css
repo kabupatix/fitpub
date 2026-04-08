@@ -1,6 +1,8 @@
 /* FitPub - 80s Aerobic Style (Static Edition) */
 
 :root {
+    /* Original neon palette — these stay as the canonical values used in dark mode
+       and as the brand identity. They're still referenced everywhere via var(). */
     --neon-pink: #ff1493;
     --neon-purple: #9d00ff;
     --neon-cyan: #00ffff;
@@ -8,28 +10,92 @@
     --neon-orange: #ff6600;
     --neon-green: #39ff14;
     --neon-blue: #00d4ff;
-    --primary-color: var(--neon-pink);
-    --secondary-color: var(--neon-cyan);
+
+    /* Deeper light-mode variants — same hue identity but darker and more saturated
+       so they read on white surfaces without washing out. The neons were designed
+       for CRT/dark backgrounds and look juvenile on white at full intensity. */
+    --pink-deep: #d4107a;
+    --cyan-deep: #0099a8;
+    --purple-deep: #8500d4;
+    --orange-deep: #d45500;
+    --green-deep: #2eb812;
+
+    /* Warm purple-tinted neutrals for light mode. Replaces pure white/gray so the
+       light theme stays thematically consistent with the dark purple brand color. */
+    --light-bg: #ffffff;
+    --light-surface: #faf6ff;        /* very subtle purple tint */
+    --light-border: #e8e0f0;         /* purple-gray, replaces #dee2e6 */
+    --light-text: #1a0033;           /* dark purple, alias of --dark-color */
+    --light-text-muted: #6b5a7e;     /* purple-gray */
+    --light-text-hint: #8a7a9e;      /* lighter purple-gray for timestamps, labels */
+
+    /* Semantic aliases. In light mode these resolve to the deeper variants;
+       the dark-mode media query below remaps them back to the full neons.
+       Calling code should prefer these semantic names over raw --neon-* so
+       components automatically adapt across themes. */
+    --primary-color: var(--pink-deep);
+    --secondary-color: var(--cyan-deep);
+
     --danger-color: #dc3545;
     --warning-color: #ffc107;
     --dark-color: #1a0033;
     --light-color: #f8f9fa;
-    --accent-orange: var(--neon-orange);
-    --accent-lime: var(--neon-green);
+    --accent-orange: var(--orange-deep);
+    --accent-lime: var(--green-deep);
     --border-radius: 0.5rem;
 }
 
-/* Base styles */
+/* Base styles
+   Body uses regular Arial for readability — the Heavy "Arial Black + uppercase"
+   treatment is applied only to elements that benefit from the 80s shout (headings,
+   buttons, brand, badges, nav links, card headers, metric labels). Body text and
+   form controls use a normal sentence-case stack so the design scales without
+   visual fatigue. See SPEC-fitpub-design-refinement.md §1. */
 body {
-    font-family: 'Arial Black', 'Arial Bold', sans-serif;
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 400;
     color: var(--dark-color);
-    background: #ffffff;
+    background: var(--light-bg);
+}
+
+/* Heavy tier — applied only to elements that should "shout" the 80s aesthetic. */
+h1, h2, h3, h4, h5, h6,
+.btn,
+.navbar-brand,
+.card-header,
+.metric-label,
+.activity-type-badge,
+.race-badge,
+.sect-label,
+.nav-link {
+    font-family: 'Arial Black', 'Arial Bold', Arial, sans-serif;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Regular tier — explicitly reset elements that might inherit Heavy treatment
+   from a parent and need normal readable text. */
+.card-body,
+.timeline-date,
+.empty-state-message,
+.form-control,
+.form-label,
+.form-text,
+.dropdown-item,
+p,
+.tl-desc,
+.text-muted {
+    font-family: Arial, Helvetica, sans-serif;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 /* Navigation */
 .navbar {
     background: linear-gradient(135deg, var(--dark-color) 0%, #2d0052 100%) !important;
-    border-bottom: 3px solid var(--neon-pink);
+    border-bottom: 2px solid var(--primary-color);
     box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
 }
 
@@ -68,37 +134,42 @@ body {
     height: 600px;
 }
 
-/* Cards */
+/* Cards
+   Subtle 1px borders by default — heavy borders are reserved for emphasis states
+   like race cards. The 80s personality comes from the gradient header background,
+   not from a 3px neon ring around every card. See SPEC §3. */
 .card {
-    background: white;
-    border: 3px solid var(--neon-pink);
+    background: var(--light-bg);
+    border: 1px solid var(--light-border);
     border-radius: var(--border-radius);
-    box-shadow: 0 4px 12px rgba(255, 20, 147, 0.3);
-    transition: box-shadow 0.2s ease;
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .card:hover {
-    box-shadow: 0 8px 20px rgba(255, 20, 147, 0.4);
+    border-color: #d4c5e6;                            /* slightly brighter purple-gray */
+    box-shadow: 0 4px 12px rgba(26, 0, 51, 0.08);     /* neutral lift, not a color explosion */
 }
 
 .card-header {
-    background: linear-gradient(135deg, var(--neon-pink) 0%, var(--neon-purple) 100%) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--purple-deep) 100%) !important;
     color: white !important;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    border-bottom: 3px solid var(--neon-orange);
+    /* The Heavy treatment (font + uppercase + letter-spacing) comes from the
+       global rule at the top of the file. The orange bottom border has been
+       removed — the gradient is enough visual separation. */
+    border-bottom: none;
 }
 
 /* Activity cards */
 .activity-card {
-    transition: box-shadow 0.2s ease;
-    border: 3px solid var(--neon-cyan);
-    box-shadow: 0 4px 12px rgba(0, 255, 255, 0.2);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--light-border);
+    box-shadow: none;
 }
 
 .activity-card:hover {
-    box-shadow: 0 8px 20px rgba(0, 255, 255, 0.4);
+    border-color: #d4c5e6;
+    box-shadow: 0 4px 12px rgba(26, 0, 51, 0.08);
 }
 
 .activity-type-badge {
@@ -106,41 +177,48 @@ body {
     padding: 0.35rem 0.85rem;
     border-radius: 1rem;
     font-size: 0.875rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    border: 2px solid currentColor;
+    /* Heavy tier (font + uppercase + spacing) inherited from the global rule. */
+    border: 1px solid;
 }
 
+/* Translucent tint badges — readable on light card surfaces without overwhelming
+   them. Race badges keep the full gradient treatment because they're meant to be
+   special. See SPEC §4. */
 .activity-type-run {
-    background: linear-gradient(135deg, var(--neon-pink) 0%, var(--neon-purple) 100%);
-    color: #ffffff;
+    background: rgba(212, 16, 122, 0.10);
+    color: var(--pink-deep);
+    border-color: rgba(212, 16, 122, 0.30);
 }
 
 .activity-type-ride {
-    background: linear-gradient(135deg, var(--neon-yellow) 0%, var(--neon-orange) 100%);
-    color: var(--dark-color);
+    background: rgba(212, 85, 0, 0.10);
+    color: var(--orange-deep);
+    border-color: rgba(212, 85, 0, 0.30);
 }
 
 .activity-type-hike {
-    background: linear-gradient(135deg, var(--neon-cyan) 0%, var(--neon-green) 100%);
-    color: var(--dark-color);
+    background: rgba(0, 153, 168, 0.08);
+    color: var(--cyan-deep);
+    border-color: rgba(0, 153, 168, 0.25);
 }
 
-/* Metrics display */
+/* Metrics display
+   Solid surface (no gradient) with a single 3px pink left-accent stripe.
+   The previous design had two competing accent colors (pink ring + orange
+   left bar) plus a colored shadow — too noisy at scale. See SPEC §3 + §5. */
 .metric-card {
-    background: linear-gradient(135deg, #ffffff 0%, #fff0ff 100%);
+    background: var(--light-bg);
     border-radius: 0.5rem;
     padding: 0.75rem 1rem;
     text-align: left;
-    border: 2px solid var(--neon-pink);
-    border-left: 6px solid var(--neon-orange);
-    box-shadow: 0 4px 8px rgba(255, 20, 147, 0.2);
-    transition: box-shadow 0.2s ease;
+    border: 1px solid var(--light-border);
+    border-left: 3px solid var(--primary-color);
+    box-shadow: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .metric-card:hover {
-    box-shadow: 0 6px 16px rgba(255, 20, 147, 0.3);
+    box-shadow: 0 2px 8px rgba(26, 0, 51, 0.06);
 }
 
 .metric-card .fw-bold {
@@ -149,18 +227,18 @@ body {
     letter-spacing: 0.05em;
 }
 
+/* Solid color instead of gradient text — gradient clip-text loses legibility
+   at the small sizes used in metric grids. Gradient text stays only for
+   the navbar brand and the h1 page heading. See SPEC §5. */
 .metric-value {
     font-size: 2rem;
     font-weight: 900;
-    background: linear-gradient(135deg, var(--neon-pink) 0%, var(--neon-purple) 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    color: var(--primary-color);
 }
 
 .metric-label {
     font-size: 0.875rem;
-    color: var(--dark-color);
+    color: var(--light-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.08em;
     font-weight: 700;
@@ -213,22 +291,25 @@ body {
 }
 
 .timeline-date {
-    color: #6b7280;
+    color: var(--light-text-muted);
     font-size: 0.875rem;
     font-weight: 600;
 }
 
-/* Timeline Cards */
+/* Timeline Cards
+   Same restraint as .card / .activity-card. The orange→green gradient ring
+   was visually heavy on a feed of 10+ cards. Race cards (.timeline-card.race-card)
+   override this with the full neon treatment further down in the file. See SPEC §3. */
 .timeline-card {
-    transition: box-shadow 0.2s;
-    border: 3px solid transparent;
-    background: linear-gradient(white, white) padding-box,
-                linear-gradient(135deg, var(--neon-orange) 0%, var(--neon-green) 100%) border-box;
-    box-shadow: 0 4px 8px rgba(255, 102, 0, 0.2);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid var(--light-border);
+    background: var(--light-bg);
+    box-shadow: none;
 }
 
 .timeline-card:hover {
-    box-shadow: 0 8px 16px rgba(255, 102, 0, 0.3);
+    border-color: #d4c5e6;
+    box-shadow: 0 4px 12px rgba(26, 0, 51, 0.08);
 }
 
 .timeline-card .user-avatar {
@@ -243,7 +324,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 2rem;
-    color: #9ca3af;
+    color: var(--light-text-hint);
 }
 
 .activity-preview-map {
@@ -278,7 +359,7 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 4rem;
-    color: #9ca3af;
+    color: var(--light-text-hint);
 }
 
 .stat-card {
@@ -303,7 +384,7 @@ body {
 
 .stat-label {
     font-size: 0.875rem;
-    color: #6b7280;
+    color: var(--light-text-muted);
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -356,7 +437,7 @@ body {
 
 /* Utility classes */
 .text-muted {
-    color: #6b7280;
+    color: var(--light-text-muted);
 }
 
 .text-small {
@@ -379,12 +460,12 @@ body {
 .empty-state {
     text-align: center;
     padding: 4rem 2rem;
-    color: #6b7280;
+    color: var(--light-text-muted);
 }
 
 .empty-state-icon {
     font-size: 5rem;
-    color: #d1d5db;
+    color: var(--light-text-hint);
     margin-bottom: 1.5rem;
     display: inline-block;
 }
@@ -392,13 +473,13 @@ body {
 .empty-state-title {
     font-size: 1.5rem;
     font-weight: 600;
-    color: #374151;
+    color: var(--light-text);
     margin-bottom: 0.5rem;
 }
 
 .empty-state-message {
     font-size: 1rem;
-    color: #6b7280;
+    color: var(--light-text-muted);
     margin-bottom: 1.5rem;
 }
 
@@ -454,76 +535,104 @@ body {
     }
 }
 
-/* Buttons */
-.btn {
+/* Footer — light mode
+   Same pink top border and brand treatment as dark mode, so the light theme
+   doesn't feel like an afterthought. See SPEC §7. */
+footer.bg-light {
+    background-color: var(--light-surface) !important;
+    border-top: 1px solid var(--light-border);
+}
+
+footer.bg-light h5 {
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
     font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    border-width: 3px;
-    transition: all 0.2s ease;
+}
+
+footer.bg-light .text-muted {
+    color: var(--light-text-muted) !important;
+}
+
+footer.bg-light a {
+    color: var(--primary-color);
+}
+
+footer.bg-light a:hover {
+    color: var(--purple-deep);
+}
+
+/* Buttons
+   Heavy typography stays (font + uppercase + spacing come from the global rule).
+   Border width drops from 3px to 2px and the hover translateY is removed —
+   the lift was playful in isolation but felt janky after repeated interaction.
+   See SPEC §3. */
+.btn {
+    border-width: 2px;
+    transition: box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
 .btn:hover {
-    transform: translateY(-2px);
+    transform: none;
 }
 
 .btn-primary {
-    background: linear-gradient(135deg, var(--neon-pink) 0%, var(--neon-purple) 100%) !important;
-    border-color: var(--neon-pink) !important;
+    background: linear-gradient(135deg, var(--primary-color) 0%, var(--purple-deep) 100%) !important;
+    border-color: var(--primary-color) !important;
     color: white !important;
-    box-shadow: 0 4px 12px rgba(255, 20, 147, 0.4);
+    box-shadow: 0 2px 8px rgba(212, 16, 122, 0.25);
 }
 
 .btn-primary:hover {
-    box-shadow: 0 6px 20px rgba(255, 20, 147, 0.5);
+    box-shadow: 0 4px 12px rgba(212, 16, 122, 0.35);
 }
 
 .btn-success {
-    background: linear-gradient(135deg, var(--neon-green) 0%, var(--neon-cyan) 100%) !important;
-    border-color: var(--neon-green) !important;
-    color: var(--dark-color) !important;
-    box-shadow: 0 4px 12px rgba(57, 255, 20, 0.4);
+    background: linear-gradient(135deg, var(--green-deep) 0%, var(--cyan-deep) 100%) !important;
+    border-color: var(--green-deep) !important;
+    color: white !important;
+    box-shadow: 0 2px 8px rgba(46, 184, 18, 0.25);
 }
 
 .btn-success:hover {
-    box-shadow: 0 6px 20px rgba(57, 255, 20, 0.5);
+    box-shadow: 0 4px 12px rgba(46, 184, 18, 0.35);
 }
 
 .btn-danger {
     background: linear-gradient(135deg, #dc3545 0%, #c92333 100%) !important;
     border-color: #dc3545 !important;
-    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.4);
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.25);
 }
 
 .btn-danger:hover {
-    box-shadow: 0 6px 20px rgba(220, 53, 69, 0.5);
+    box-shadow: 0 4px 12px rgba(220, 53, 69, 0.35);
 }
 
 .btn-outline-primary {
-    border-color: var(--neon-pink) !important;
-    color: var(--neon-pink) !important;
-    border-width: 3px !important;
+    border-color: var(--primary-color) !important;
+    color: var(--primary-color) !important;
+    border-width: 2px !important;
     background: transparent !important;
 }
 
 .btn-outline-primary:hover {
-    background: var(--neon-pink) !important;
+    background: var(--primary-color) !important;
     color: white !important;
 }
 
-/* Headings */
+/* Headings — Heavy typography is set globally; this just sets color and the
+   special h1 gradient. h2–h6 use solid dark color so they don't compete with
+   the h1 page heading. See SPEC §1 + §5. */
 h1, h2, h3, h4, h5, h6 {
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
     color: var(--dark-color);
 }
 
 h1 {
     background: linear-gradient(135deg,
-        var(--neon-pink) 0%,
-        var(--neon-cyan) 50%,
-        var(--neon-orange) 100%);
+        var(--primary-color) 0%,
+        var(--secondary-color) 50%,
+        var(--orange-deep) 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -543,6 +652,13 @@ h1 {
         --dark-text: #e8e8f0;
         --dark-text-muted: #a8a8c0;
         --dark-border: #3d2060;
+
+        /* Remap the semantic aliases back to the full-intensity neons —
+           dark backgrounds need the bright versions to read properly. */
+        --primary-color: var(--neon-pink);
+        --secondary-color: var(--neon-cyan);
+        --accent-orange: var(--neon-orange);
+        --accent-lime: var(--neon-green);
     }
 
     /* Base */
@@ -560,15 +676,17 @@ h1 {
         color: var(--dark-text) !important;
     }
 
-    /* Cards */
+    /* Cards — subtle dark borders, same restraint as light mode. */
     .card {
         background: var(--dark-surface);
-        border-color: var(--neon-pink);
+        border-color: var(--dark-border);
         color: var(--dark-text);
+        box-shadow: none;
     }
 
     .card:hover {
-        box-shadow: 0 8px 20px rgba(255, 20, 147, 0.5);
+        border-color: #5a3080;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
 
     .card-body {
@@ -578,18 +696,26 @@ h1 {
 
     .activity-card {
         background: var(--dark-surface);
-        border-color: var(--neon-cyan);
-        box-shadow: 0 4px 12px rgba(0, 255, 255, 0.3);
+        border-color: var(--dark-border);
+        box-shadow: none;
     }
 
     .activity-card:hover {
-        box-shadow: 0 8px 20px rgba(0, 255, 255, 0.5);
+        border-color: #5a3080;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
 
     /* Timeline */
     .timeline-card {
         background: var(--dark-surface) !important;
         color: var(--dark-text);
+        border-color: var(--dark-border);
+        box-shadow: none;
+    }
+
+    .timeline-card:hover {
+        border-color: #5a3080;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     }
 
     .timeline-card .text-dark {
@@ -616,19 +742,43 @@ h1 {
         color: var(--dark-text-muted);
     }
 
-    /* Metrics */
+    /* Metrics — solid surface, single pink left-accent stripe. */
     .metric-card {
-        background: linear-gradient(135deg, var(--dark-surface) 0%, var(--dark-bg-alt) 100%);
-        border-color: var(--neon-pink);
-        box-shadow: 0 4px 8px rgba(255, 20, 147, 0.3);
+        background: var(--dark-surface);
+        border: 1px solid var(--dark-border);
+        border-left: 3px solid var(--neon-pink);
+        box-shadow: none;
     }
 
     .metric-card:hover {
-        box-shadow: 0 6px 16px rgba(255, 20, 147, 0.4);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+
+    .metric-value {
+        color: var(--neon-pink);
     }
 
     .metric-label {
         color: var(--dark-text-muted);
+    }
+
+    /* Activity type badges — translucent tints, dark mode variants. */
+    .activity-type-run {
+        background: rgba(255, 20, 147, 0.15);
+        color: var(--neon-pink);
+        border-color: rgba(255, 20, 147, 0.30);
+    }
+
+    .activity-type-ride {
+        background: rgba(255, 102, 0, 0.15);
+        color: var(--neon-orange);
+        border-color: rgba(255, 102, 0, 0.30);
+    }
+
+    .activity-type-hike {
+        background: rgba(0, 255, 255, 0.12);
+        color: var(--neon-cyan);
+        border-color: rgba(0, 255, 255, 0.25);
     }
 
     /* File upload */
