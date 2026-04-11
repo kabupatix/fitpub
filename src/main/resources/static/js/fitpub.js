@@ -434,7 +434,7 @@ function formatDateTimeWithTimezone(timestamp, timezone, options = {}) {
 
     // Parse the timestamp - backend sends LocalDateTime without 'Z'
     // We need to interpret it in the specified timezone
-    const date = new Date(timestamp);
+    const date = new Date(ensureUTC(timestamp));
 
     // Default options for date/time display
     const defaultOptions = {
@@ -471,6 +471,17 @@ function formatDateWithTimezone(timestamp, timezone) {
         hour: undefined,
         minute: undefined
     });
+}
+
+/**
+ * Ensures that a timestamp will be interpreted as UTC by new Date()
+ * See https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Date (Date time string format)
+ *
+ * @param {string} timestamp - ISO timestamp or LocalDateTime string
+ * @returns {string} The input string, but with a trailing 'Z'
+ */
+function ensureUTC(timestamp) {
+    return timestamp.endsWith('Z') ? timestamp : timestamp + 'Z';
 }
 
 // Make functions available globally for inline scripts
