@@ -104,7 +104,7 @@ public class TimelineActivityDTO {
             .indoorDetectionMethod(activity.getIndoorDetectionMethod())
             .race(activity.getRace() != null ? activity.getRace() : false)
             .metrics(activity.getMetrics() != null ? ActivityMetricsSummary.fromMetrics(activity.getMetrics()) : null)
-            .activityLocation(activity.getActivityLocation())
+            .activityLocation(activity.getActivityLocationNonNull())
             .build();
     }
 

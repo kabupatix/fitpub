@@ -98,7 +98,7 @@ public class TimelineResultMapper {
                 .commentsCount(commentsCount)
                 .likedByCurrentUser(likedByCurrentUser)
                 .hasGpsTrack(true)  // Will be refined based on actual data
-                .activityLocation(activityLocation)
+                .activityLocation(activityLocation != null ? activityLocation : "")
                 .build();
 
         } catch (Exception e) {

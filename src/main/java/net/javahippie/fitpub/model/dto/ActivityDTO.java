@@ -133,7 +133,7 @@ public class ActivityDTO {
             .elevationLoss(activity.getElevationLoss())
             .createdAt(activity.getCreatedAt())
             .updatedAt(activity.getUpdatedAt())
-            .activityLocation(activity.getActivityLocation());
+            .activityLocation(activity.getActivityLocationNonNull());
 
         if (activity.getTotalDurationSeconds() != null) {
             builder.totalDurationSeconds(activity.getTotalDurationSeconds());
@@ -246,7 +246,7 @@ public class ActivityDTO {
                 .subSport(activity.getSubSport())
                 .indoorDetectionMethod(activity.getIndoorDetectionMethod())
                 .race(activity.getRace() != null ? activity.getRace() : false)
-                .activityLocation(activity.getActivityLocation())
+                .activityLocation(activity.getActivityLocationNonNull())
                 .build();
         }
 
@@ -266,7 +266,7 @@ public class ActivityDTO {
             .elevationLoss(activity.getElevationLoss())
             .createdAt(activity.getCreatedAt())
             .updatedAt(activity.getUpdatedAt())
-            .activityLocation(activity.getActivityLocation());
+            .activityLocation(activity.getActivityLocationNonNull());
 
         if (activity.getTotalDurationSeconds() != null) {
             builder.totalDurationSeconds(activity.getTotalDurationSeconds());

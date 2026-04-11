@@ -214,6 +214,10 @@ public class Activity {
         }
     }
 
+    public String getActivityLocationNonNull() {
+        return activityLocation != null ? activityLocation : "";
+    }
+
     /**
      * Activity types supported by the platform
      */
