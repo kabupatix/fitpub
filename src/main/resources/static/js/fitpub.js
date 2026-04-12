@@ -493,5 +493,6 @@ window.FitPub = {
     formatDistance,
     formatPace,
     formatDateTimeWithTimezone,
-    formatDateWithTimezone
+    formatDateWithTimezone,
+    ensureUTC
 };

@@ -727,7 +727,7 @@ const FitPubTimeline = {
      * @returns {string} Time ago string
      */
     formatTimeAgo: function(timestamp) {
-        const date = new Date(timestamp);
+        const date = new Date(FitPub.ensureUTC(timestamp));
         const now = new Date();
         const secondsAgo = Math.floor((now - date) / 1000);
 
