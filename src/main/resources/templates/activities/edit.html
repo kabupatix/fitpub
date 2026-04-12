@@ -212,7 +212,7 @@
                 function populateForm(activity) {
                     // Populate form fields
                     document.getElementById('title').value = activity.title || '';
-                    document.getElementById('activityType').value = activity.activityType || 'OTHER';
+                    document.getElementById('activityType').value = activity.activityType?.toUpperCase() || 'OTHER';
                     document.getElementById('description').value = activity.description || '';
                     document.getElementById('visibility').value = activity.visibility || 'PUBLIC';
                     document.getElementById('race').checked = activity.race || false;
