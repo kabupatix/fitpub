@@ -20,6 +20,9 @@ import java.util.List;
  */
 @Data
 public class ParsedActivityData {
+
+    static final int MAX_TITLE_LENGTH = 255;
+
     private List<TrackPointData> trackPoints = new ArrayList<>();
     private LocalDateTime startTime;
     private LocalDateTime endTime;

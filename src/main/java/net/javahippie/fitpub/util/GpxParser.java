@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static net.javahippie.fitpub.util.ParsedActivityData.MAX_TITLE_LENGTH;
+
 /**
  * Parser for GPX (GPS Exchange Format) files.
  * Extracts GPS coordinates, activity metrics from track points.
@@ -280,9 +282,9 @@ public class GpxParser {
         String title = getElementText(track, "name");
         if (title != null) {
             String shortenedTitle = title;
-            if (title.length() > 255) {
-                log.debug("Activity title was shortened to 255 characters: {}", title);
-                shortenedTitle = title.substring(0, 255);
+            if (title.length() > MAX_TITLE_LENGTH) {
+                log.debug("Activity title was shortened to {} characters: {}", MAX_TITLE_LENGTH, title);
+                shortenedTitle = title.substring(0, MAX_TITLE_LENGTH);
             }
             parsedData.setTitle(shortenedTitle);
         }
