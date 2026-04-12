@@ -112,6 +112,7 @@ class GpxParserIntegrationTest {
 
         // Verify at least some basic data
         assertNotNull(parsedData.getActivityType(), "Activity type should be determined");
+        assertEquals("Einmal Frust loswerden", parsedData.getTitle());
         assertEquals(Activity.ActivityType.RUN, parsedData.getActivityType(),
             "Activity type should be RUN (from GPX <type>running</type>)");
         assertTrue(parsedData.getTrackPoints().size() > 0, "Should have at least one track point");
@@ -379,6 +380,7 @@ class GpxParserIntegrationTest {
         // Test converting to entity structures
         Activity.ActivityType activityType = parsedData.getActivityType();
         assertNotNull(activityType, "Activity type should be extracted");
+        assertEquals("Einmal Frust loswerden", parsedData.getTitle());
         assertEquals(Activity.ActivityType.RUN, activityType,
             "Activity should be detected as RUN from GPX <type>running</type>");
 
