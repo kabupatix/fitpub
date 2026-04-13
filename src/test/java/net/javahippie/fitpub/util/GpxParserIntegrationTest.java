@@ -112,6 +112,10 @@ class GpxParserIntegrationTest {
 
         // Verify at least some basic data
         assertNotNull(parsedData.getActivityType(), "Activity type should be determined");
+        String parsedTitle = parsedData.getTitle();
+        assertEquals(255, parsedTitle.length());
+        assertTrue(parsedTitle.startsWith("Einmal Frust loswerden"));
+        assertFalse(parsedTitle.contains("Shouldn't appear"));
         assertEquals(Activity.ActivityType.RUN, parsedData.getActivityType(),
             "Activity type should be RUN (from GPX <type>running</type>)");
         assertTrue(parsedData.getTrackPoints().size() > 0, "Should have at least one track point");

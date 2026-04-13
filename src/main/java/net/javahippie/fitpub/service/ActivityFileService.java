@@ -378,10 +378,16 @@ public class ActivityFileService {
         byte[] rawFile,
         ProcessingOptions options
     ) throws JsonProcessingException {
-        // Generate title if not provided
-        String activityTitle = title != null && !title.isBlank()
-            ? title
-            : ActivityFormatter.generateActivityTitle(parsedData.getStartTime(), parsedData.getActivityType());
+        String activityTitle;
+        if (title != null && !title.isBlank()) {
+            activityTitle = title;
+        } else if (parsedData.getTitle() != null) {
+            // Try to use title from input file
+            activityTitle = parsedData.getTitle();
+        } else {
+            // Generate title if not provided
+            activityTitle = ActivityFormatter.generateActivityTitle(parsedData.getStartTime(), parsedData.getActivityType());
+        }
 
         // Default to PUBLIC if visibility not specified
         Activity.Visibility activityVisibility = visibility != null ? visibility : Activity.Visibility.PRIVATE;

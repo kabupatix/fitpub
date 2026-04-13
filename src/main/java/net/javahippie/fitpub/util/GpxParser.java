@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
+import static net.javahippie.fitpub.util.ParsedActivityData.MAX_TITLE_LENGTH;
+
 /**
  * Parser for GPX (GPS Exchange Format) files.
  * Extracts GPS coordinates, activity metrics from track points.
@@ -80,8 +82,12 @@ public class GpxParser {
             // Calculate duration
             parsedData.setTotalDuration(Duration.between(firstPoint.getTimestamp(), lastPoint.getTimestamp()));
 
-            // Extract activity type from metadata
-            extractActivityType(doc, parsedData);
+            // Extract activity type and title from metadata
+            Optional<Element> track = getFirstTrack(doc);
+            if (track.isPresent()) {
+                extractActivityType(track.get(), parsedData);
+                extractActivityTitle(track.get(), parsedData);
+            }
 
             // Determine timezone from first GPS coordinate
             determineTimezone(parsedData);
@@ -110,6 +116,8 @@ public class GpxParser {
             throw new GpxFileProcessingException("Failed to parse GPX file", e);
         }
     }
+
+
 
     /**
      * Extracts track points from GPX document.
@@ -245,21 +253,40 @@ public class GpxParser {
         }
     }
 
-    /**
-     * Extracts activity type from GPX metadata.
+    /*
+     * Returns the first <trk> element from the GPS XML
      */
-    private void extractActivityType(Document doc, ParsedActivityData parsedData) {
+    private Optional<Element> getFirstTrack(Document doc) {
         NodeList tracks = doc.getElementsByTagName("trk");
         if (tracks.getLength() == 0) {
             tracks = doc.getElementsByTagNameNS("*", "trk");
         }
 
-        if (tracks.getLength() > 0) {
-            Element track = (Element) tracks.item(0);
-            String type = getElementText(track, "type");
-            if (type != null) {
-                parsedData.setActivityType(mapGpxTypeToActivityType(type));
+        return tracks.getLength() > 0 ? Optional.of((Element) tracks.item(0)) : Optional.empty();
+    }
+
+    /**
+     * Extracts activity type from GPX metadata.
+     */
+    private void extractActivityType(Element track, ParsedActivityData parsedData) {
+        String type = getElementText(track, "type");
+        if (type != null) {
+            parsedData.setActivityType(mapGpxTypeToActivityType(type));
+        }
+    }
+
+    /**
+     * Extracts activity title from GPX metadata.
+     */
+    private void extractActivityTitle(Element track, ParsedActivityData parsedData) {
+        String title = getElementText(track, "name");
+        if (title != null) {
+            String shortenedTitle = title;
+            if (title.length() > MAX_TITLE_LENGTH) {
+                log.debug("Activity title was shortened to {} characters: {}", MAX_TITLE_LENGTH, title);
+                shortenedTitle = title.substring(0, MAX_TITLE_LENGTH);
             }
+            parsedData.setTitle(shortenedTitle);
         }
     }
 
