@@ -386,7 +386,8 @@ public class ActivityFileService {
             activityTitle = parsedData.getTitle();
         } else {
             // Generate title if not provided
-            activityTitle = ActivityFormatter.generateActivityTitle(parsedData.getStartTime(), parsedData.getActivityType());
+            activityTitle = ActivityFormatter.generateActivityTitle(parsedData.getStartTime(), parsedData.getTimezone(),
+                    parsedData.getActivityType());
         }
 
         // Default to PUBLIC if visibility not specified

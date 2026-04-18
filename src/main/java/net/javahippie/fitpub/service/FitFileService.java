@@ -24,7 +24,6 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -257,7 +256,7 @@ public class FitFileService {
     private String generateTitle(ParsedActivityData parsedData) {
         return ActivityFormatter.generateActivityTitle(
             parsedData.getStartTime(),
-            parsedData.getActivityType()
+                parsedData.getTimezone(), parsedData.getActivityType()
         );
     }
 

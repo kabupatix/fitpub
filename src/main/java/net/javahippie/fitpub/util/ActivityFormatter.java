@@ -1,13 +1,14 @@
 package net.javahippie.fitpub.util;
 
+import lombok.extern.slf4j.Slf4j;
 import net.javahippie.fitpub.model.entity.Activity;
 
-import java.time.LocalDateTime;
-import java.time.LocalTime;
+import java.time.*;
 
 /**
  * Utility class for formatting activity-related data for display.
  */
+@Slf4j
 public class ActivityFormatter {
 
     /**
@@ -47,20 +48,24 @@ public class ActivityFormatter {
      * Generates a default activity title based on the time of day and activity type.
      * Format: "[Time of Day] [Activity Type]" (e.g., "Morning Run", "Evening Ride")
      *
-     * @param startedAt the activity start time
+     * @param startedAt    the activity start time
+     * @param timezone     the timezone ID of the activity
      * @param activityType the activity type
      * @return generated title
      */
-    public static String generateActivityTitle(LocalDateTime startedAt, Activity.ActivityType activityType) {
+    public static String generateActivityTitle(LocalDateTime startedAt, String timezone, Activity.ActivityType activityType) {
         if (startedAt == null || activityType == null) {
             return "Activity";
         }
 
-        String timeOfDay = getTimeOfDay(startedAt.toLocalTime());
+        LocalDateTime startedAtLocal = getUtcDateTimeInZone(startedAt, timezone);
+        String timeOfDay = getTimeOfDay(startedAtLocal.toLocalTime());
         String formattedType = formatActivityType(activityType);
 
         return timeOfDay + " " + formattedType;
     }
+
+
 
     /**
      * Determines the time of day based on the hour.
@@ -79,6 +84,27 @@ public class ActivityFormatter {
             return "Evening";
         } else {
             return "Night";
+        }
+    }
+
+    /**
+     * Attempts to convert the given LocalDateTime (which is assumed to be UTC) into a LocalDateTime in the given
+     * timezone
+     *
+     * @param utcDateTime The original date and time (UTC)
+     * @param timezone A timezone ID
+     * @return The original date and time adjusted to the timezone, if the zone ID could be parsed. The original date
+     * and time otherwise
+     *
+     */
+    private static LocalDateTime getUtcDateTimeInZone(LocalDateTime utcDateTime, String timezone) {
+        try {
+            return utcDateTime.atZone(ZoneOffset.UTC)
+                    .withZoneSameInstant(ZoneId.of(timezone))
+                    .toLocalDateTime();
+        } catch (DateTimeException e) {
+            log.warn("Invalid time zone ID: {}", timezone);
+            return utcDateTime;
         }
     }
 }
