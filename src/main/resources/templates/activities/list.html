@@ -97,7 +97,9 @@
                 const emptyState = document.getElementById('emptyState');
                 const pagination = document.getElementById('pagination');
 
-                let currentPage = 0;
+                const pageFromUrl = new URLSearchParams(window.location.search).get('page') || 1;
+                // Page in URL query parameter is 1-based
+                let currentPage = pageFromUrl - 1;
                 let totalPages = 0;
                 let activityToDelete = null;
 
@@ -212,10 +214,10 @@
                     const paginationList = document.getElementById('paginationList');
                     let html = '';
 
-                    // Previous button
+                    // Previous button (data.number + 1 - 1, data.number is 0-based)
                     html += `
                         <li class="page-item ${data.first ? 'disabled' : ''}">
-                            <a class="page-link" href="#" onclick="changePage(${data.number - 1}); return false;">
+                            <a class="page-link" href="/activities?page=${data.number}">
                                 <i class="bi bi-chevron-left"></i>
                             </a>
                         </li>
@@ -232,7 +234,7 @@
                     for (let i = startPage; i <= endPage; i++) {
                         html += `
                             <li class="page-item ${i === data.number ? 'active' : ''}">
-                                <a class="page-link" href="#" onclick="changePage(${i}); return false;">${i + 1}</a>
+                                <a class="page-link" href="/activities?page=${i + 1}">${i + 1}</a>
                             </li>
                         `;
                     }
@@ -241,10 +243,10 @@
                         html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
                     }
 
-                    // Next button
+                    // Next button (data.number + 1 + 1, data.number is 0-based)
                     html += `
                         <li class="page-item ${data.last ? 'disabled' : ''}">
-                            <a class="page-link" href="#" onclick="changePage(${data.number + 1}); return false;">
+                            <a class="page-link" href="/activities?page=${data.number + 2}">
                                 <i class="bi bi-chevron-right"></i>
                             </a>
                         </li>
@@ -254,11 +256,6 @@
                 }
 
                 // Global functions for pagination and delete
-                window.changePage = function(page) {
-                    loadActivities(page);
-                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                };
-
                 window.confirmDelete = function(activityId) {
                     activityToDelete = activityId;
                     const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
