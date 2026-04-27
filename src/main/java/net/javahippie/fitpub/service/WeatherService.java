@@ -1,6 +1,5 @@
 package net.javahippie.fitpub.service;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -9,23 +8,22 @@ import net.javahippie.fitpub.model.entity.Activity;
 import net.javahippie.fitpub.model.entity.TrackPoint;
 import net.javahippie.fitpub.model.entity.WeatherData;
 import net.javahippie.fitpub.repository.WeatherDataRepository;
-import org.locationtech.jts.geom.Point;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
-import java.net.URI;
-import java.time.Instant;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 /**
  * Service for fetching and managing weather data for activities.
- * Uses OpenWeatherMap API to retrieve historical weather data.
+ * Uses Open-Meteo archive API to retrieve historical weather data.
  */
 @Service
 @Slf4j
@@ -36,14 +34,10 @@ public class WeatherService {
     private final RestTemplate restTemplate = new RestTemplate();
     private final ObjectMapper objectMapper = new ObjectMapper();
 
-    @Value("${fitpub.weather.api-key:}")
-    private String apiKey;
-
     @Value("${fitpub.weather.enabled:false}")
     private boolean weatherEnabled;
 
-    private static final String OPENWEATHERMAP_API_URL = "https://api.openweathermap.org/data/2.5/weather";
-    private static final String OPENWEATHERMAP_TIMEMACHINE_URL = "https://api.openweathermap.org/data/3.0/onecall/timemachine";
+    private static final String OPEN_METEO_API_URL = "https://archive-api.open-meteo.com/v1/archive?latitude={latitude}&longitude={longitude}&start_date={start_date}&end_date={end_date}&hourly={hourly}";
 
     /**
      * Fetch and store weather data for an activity.
@@ -55,24 +49,6 @@ public class WeatherService {
     @Transactional
     public Optional<WeatherData> fetchWeatherForActivity(Activity activity) {
         log.info("=== Weather fetch requested for activity {} ===", activity.getId());
-        log.info("Weather configuration: enabled={}, API key configured={}, API key length={}",
-                weatherEnabled, (apiKey != null && !apiKey.isBlank()),
-                (apiKey != null ? apiKey.length() : 0));
-
-        if (!weatherEnabled) {
-            log.warn("Weather fetching is DISABLED in configuration (fitpub.weather.enabled=false). " +
-                     "Set fitpub.weather.enabled=true in application properties to enable.");
-            return Optional.empty();
-        }
-
-        if (apiKey == null || apiKey.isBlank()) {
-            log.error("Weather API key is NOT CONFIGURED (fitpub.weather.api-key is empty). " +
-                      "Please set fitpub.weather.api-key in application properties.");
-            return Optional.empty();
-        }
-
-        log.debug("Weather API key present: length={} chars, first 4 chars={}...",
-                apiKey.length(), apiKey.length() > 4 ? apiKey.substring(0, 4) : "???");
 
         if (activity.getTrackPointsJson() == null || activity.getTrackPointsJson().isEmpty()) {
             log.warn("No track points available for activity {} - cannot fetch weather", activity.getId());
@@ -88,21 +64,7 @@ public class WeatherService {
                 return Optional.empty();
             } else {
                 var resolvedTrackPoint = trackPoint.get();
-                // Check if activity is recent (within 5 days) because it's free to use. Don't call other timeframes, expensive.
-                long activityTimestamp = activity.getStartedAt().atZone(ZoneId.systemDefault()).toEpochSecond();
-                long currentTimestamp = Instant.now().getEpochSecond();
-                long daysDifference = (currentTimestamp - activityTimestamp) / 86400;
-
-                log.info("Activity started at: {}, days ago: {}", activity.getStartedAt(), daysDifference);
-
-                WeatherData weatherData;
-                if (daysDifference <= 5) {
-                    log.info("Activity is RECENT ({} days old, within 5 day threshold), fetching current weather from OpenWeatherMap", daysDifference);
-                    weatherData = fetchCurrentWeather(resolvedTrackPoint.lat(), resolvedTrackPoint.lon(), activity.getId());
-                } else {
-                    log.warn("Activity is {} days old (exceeds 5 day threshold). Historical weather data requires OpenWeatherMap paid API plan. Skipping weather fetch.", daysDifference);
-                    return Optional.empty();
-                }
+                WeatherData weatherData = fetchCurrentWeather(resolvedTrackPoint.lat(), resolvedTrackPoint.lon(), activity.getId(), activity.getStartedAt());
 
                 if (weatherData != null) {
                     log.info("Successfully fetched and parsed weather data. Attempting to save to database...");
@@ -128,219 +90,216 @@ public class WeatherService {
     }
 
     /**
-     * Fetch current weather data from OpenWeatherMap.
+     * Fetch current weather data from Open-Meteo archive API.
      */
-    private WeatherData fetchCurrentWeather(double lat, double lon, UUID activityId) {
+    private WeatherData fetchCurrentWeather(double lat, double lon, UUID activityId, LocalDateTime startedAt) {
         log.info("=== fetchCurrentWeather START === activityId={}, lat={}, lon={}", activityId, lat, lon);
         try {
-            String url = String.format("%s?lat=%f&lon=%f&appid=%s&units=metric",
-                    OPENWEATHERMAP_API_URL, lat, lon, apiKey);
 
-            String maskedUrl = url.replace(apiKey, "***API_KEY***");
-            log.info("Constructed OpenWeatherMap API URL: {}", maskedUrl);
-            log.info("Request parameters: lat={}, lon={}, units=metric", lat, lon);
+            Map<String, Object> uriVariables = Map.of(
+                    "latitude", lat,
+                    "longitude", lon,
+                    "start_date", startedAt.format(DateTimeFormatter.ISO_DATE),
+                    "end_date", startedAt.format(DateTimeFormatter.ISO_DATE),
+                    "hourly", "temperature_2m,apparent_temperature,relative_humidity_2m,surface_pressure,wind_speed_10m,wind_direction_10m,cloud_cover,rain,snowfall,precipitation,visibility,weather_code"
+            );
+
+            log.info("Request parameters: lat={}, lon={}, date={}", lat, lon, startedAt);
 
             long startTime = System.currentTimeMillis();
-            log.info("Sending HTTP GET request to OpenWeatherMap...");
-            String response = restTemplate.getForObject(URI.create(url), String.class);
+            log.info("Sending HTTP GET request to Open-Meteo...");
+            String response = restTemplate.getForObject(OPEN_METEO_API_URL, String.class, uriVariables);
             long duration = System.currentTimeMillis() - startTime;
 
             log.info("HTTP request completed in {}ms, response received", duration);
 
             if (response == null) {
-                log.error("API response is NULL - RestTemplate returned null, no data from OpenWeatherMap");
+                log.error("API response is NULL - RestTemplate returned null, no data from Open-Meteo");
                 return null;
             }
 
-            log.info("API response received: {} characters", response.length());
             log.info("API response (first 300 chars): {}",
                     response.length() > 300 ? response.substring(0, 300) + "..." : response);
 
             log.info("Parsing weather response JSON...");
-            WeatherData weatherData = parseWeatherResponse(response, activityId);
+            WeatherData weatherData = parseWeatherResponse(response, activityId, startedAt);
 
             if (weatherData == null) {
                 log.error("FAILED to parse weather response - see parsing errors above");
             } else {
-                log.info("Successfully parsed weather data: temp={}°C, feels_like={}°C, condition='{}', description='{}', humidity={}%, pressure={} hPa, wind={} m/s",
+                log.info("Successfully parsed weather data: temp={}°C, condition='{}', wind={} m/s, precipitation={} mm",
                         weatherData.getTemperatureCelsius(),
-                        weatherData.getFeelsLikeCelsius(),
                         weatherData.getWeatherCondition(),
-                        weatherData.getWeatherDescription(),
-                        weatherData.getHumidity(),
-                        weatherData.getPressure(),
-                        weatherData.getWindSpeedMps());
+                        weatherData.getWindSpeedMps(),
+                        weatherData.getPrecipitationMm());
             }
 
             log.info("=== fetchCurrentWeather END === success={}", (weatherData != null));
             return weatherData;
 
         } catch (org.springframework.web.client.HttpClientErrorException e) {
-            log.error("=== HTTP CLIENT ERROR (4xx) from OpenWeatherMap API ===");
-            log.error("Status Code: {}", e.getStatusCode());
-            log.error("Status Text: {}", e.getStatusText());
-            log.error("Response Body: {}", e.getResponseBodyAsString());
-            log.error("Request URL (masked): {}", OPENWEATHERMAP_API_URL + "?lat=" + lat + "&lon=" + lon + "&appid=***&units=metric");
-            if (e.getStatusCode().value() == 401) {
-                log.error("AUTHENTICATION FAILED - Check your OpenWeatherMap API key is valid and active");
-            } else if (e.getStatusCode().value() == 404) {
-                log.error("API ENDPOINT NOT FOUND - Check coordinates are valid: lat={}, lon={}", lat, lon);
-            } else if (e.getStatusCode().value() == 429) {
-                log.error("RATE LIMIT EXCEEDED - Too many API requests. Check your OpenWeatherMap plan limits.");
-            }
-            log.error("Exception details:", e);
+            log.error("HTTP client error (4xx) from Open-Meteo API: {} - {}", e.getStatusCode(), e.getResponseBodyAsString(), e);
             return null;
         } catch (org.springframework.web.client.HttpServerErrorException e) {
-            log.error("=== HTTP SERVER ERROR (5xx) from OpenWeatherMap API ===");
-            log.error("Status Code: {}", e.getStatusCode());
-            log.error("Status Text: {}", e.getStatusText());
-            log.error("Response Body: {}", e.getResponseBodyAsString());
-            log.error("OpenWeatherMap service may be experiencing issues. Try again later.");
-            log.error("Exception details:", e);
+            log.error("HTTP server error (5xx) from Open-Meteo API: {} - {}", e.getStatusCode(), e.getResponseBodyAsString(), e);
             return null;
         } catch (org.springframework.web.client.ResourceAccessException e) {
-            log.error("=== NETWORK/CONNECTION ERROR accessing OpenWeatherMap API ===");
-            log.error("Error message: {}", e.getMessage());
-            log.error("This could indicate: DNS resolution failure, network connectivity issues, firewall blocking, or SSL certificate problems");
-            log.error("API URL attempted: {}", OPENWEATHERMAP_API_URL);
-            log.error("Exception details:", e);
-            return null;
-        } catch (org.springframework.web.client.RestClientException e) {
-            log.error("=== REST CLIENT EXCEPTION calling OpenWeatherMap API ===");
-            log.error("Exception type: {}", e.getClass().getName());
-            log.error("Error message: {}", e.getMessage());
-            log.error("Exception details:", e);
+            log.error("Network error accessing Open-Meteo API: {}", e.getMessage(), e);
             return null;
         } catch (Exception e) {
-            log.error("=== UNEXPECTED EXCEPTION fetching current weather ===");
-            log.error("Exception type: {}", e.getClass().getName());
-            log.error("Error message: {}", e.getMessage());
-            log.error("Activity ID: {}", activityId);
-            log.error("Coordinates: lat={}, lon={}", lat, lon);
-            log.error("Full stack trace:", e);
+            log.error("Unexpected exception fetching weather for activity {}: {}", activityId, e.getMessage(), e);
             return null;
         }
     }
 
     /**
-     * Parse OpenWeatherMap API response and create WeatherData entity.
+     * Parse Open-Meteo archive API response and create WeatherData entity.
+     * Extracts the hourly data point matching the activity's start hour.
      */
-    private WeatherData parseWeatherResponse(String response, UUID activityId) {
+    private WeatherData parseWeatherResponse(String response, UUID activityId, LocalDateTime startedAt) {
         log.debug("=== parseWeatherResponse START === activityId={}", activityId);
         try {
             JsonNode root = objectMapper.readTree(response);
-            log.debug("JSON parsed successfully, root node present: {}", root != null);
+
+            JsonNode hourly = root.get("hourly");
+            if (hourly == null) {
+                log.warn("Response JSON does not contain 'hourly' section");
+                return null;
+            }
+
+            // Find the index matching the activity start hour
+            JsonNode times = hourly.get("time");
+            String targetHour = startedAt.format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:00"));
+            int hourIndex = -1;
+            for (int i = 0; i < times.size(); i++) {
+                if (times.get(i).asText().equals(targetHour)) {
+                    hourIndex = i;
+                    break;
+                }
+            }
+
+            if (hourIndex == -1) {
+                log.warn("No matching hour found for {} in response", targetHour);
+                return null;
+            }
+
+            log.debug("Matched hour index {} for {}", hourIndex, targetHour);
 
             WeatherData weatherData = new WeatherData();
             weatherData.setActivityId(activityId);
+            weatherData.setTemperatureCelsius(getHourlyBigDecimal(hourly, "temperature_2m", hourIndex));
+            weatherData.setFeelsLikeCelsius(getHourlyBigDecimal(hourly, "apparent_temperature", hourIndex));
+            weatherData.setHumidity(getHourlyInteger(hourly, "relative_humidity_2m", hourIndex));
+            weatherData.setPressure(getHourlyInteger(hourly, "surface_pressure", hourIndex));
+            weatherData.setWindDirection(getHourlyInteger(hourly, "wind_direction_10m", hourIndex));
+            weatherData.setCloudiness(getHourlyInteger(hourly, "cloud_cover", hourIndex));
+            weatherData.setVisibilityMeters(getHourlyInteger(hourly, "visibility", hourIndex));
+            weatherData.setPrecipitationMm(getHourlyBigDecimal(hourly, "precipitation", hourIndex));
+            weatherData.setWeatherCondition(mapWmoCodeToCondition(getHourlyInteger(hourly, "weather_code", hourIndex)));
+            weatherData.setWeatherDescription(mapWmoCodeToDescription(getHourlyInteger(hourly, "weather_code", hourIndex)));
 
-            // Main temperature data
-            if (root.has("main")) {
-                JsonNode main = root.get("main");
-                log.debug("Parsing 'main' section: {}", main);
-                weatherData.setTemperatureCelsius(getBigDecimal(main, "temp"));
-                weatherData.setFeelsLikeCelsius(getBigDecimal(main, "feels_like"));
-                weatherData.setHumidity(getInteger(main, "humidity"));
-                weatherData.setPressure(getInteger(main, "pressure"));
-                log.debug("Extracted main data: temp={}, feels_like={}, humidity={}, pressure={}",
-                        weatherData.getTemperatureCelsius(), weatherData.getFeelsLikeCelsius(),
-                        weatherData.getHumidity(), weatherData.getPressure());
-            } else {
-                log.warn("Response JSON does not contain 'main' section");
+            // Open-Meteo returns wind speed in km/h, convert to m/s
+            BigDecimal windKmh = getHourlyBigDecimal(hourly, "wind_speed_10m", hourIndex);
+            if (windKmh != null) {
+                weatherData.setWindSpeedMps(windKmh.divide(BigDecimal.valueOf(3.6), 2, RoundingMode.HALF_UP));
             }
 
-            // Wind data
-            if (root.has("wind")) {
-                JsonNode wind = root.get("wind");
-                log.debug("Parsing 'wind' section: {}", wind);
-                weatherData.setWindSpeedMps(getBigDecimal(wind, "speed"));
-                weatherData.setWindDirection(getInteger(wind, "deg"));
-                log.debug("Extracted wind data: speed={} m/s, direction={} degrees",
-                        weatherData.getWindSpeedMps(), weatherData.getWindDirection());
-            } else {
-                log.debug("Response JSON does not contain 'wind' section");
-            }
-
-            // Weather condition
-            if (root.has("weather") && root.get("weather").isArray() && !root.get("weather").isEmpty()) {
-                JsonNode weather = root.get("weather").get(0);
-                log.debug("Parsing 'weather' array (first element): {}", weather);
-                weatherData.setWeatherCondition(getString(weather, "main"));
-                weatherData.setWeatherDescription(getString(weather, "description"));
-                weatherData.setWeatherIcon(getString(weather, "icon"));
-                log.debug("Extracted weather condition: main='{}', description='{}', icon='{}'",
-                        weatherData.getWeatherCondition(), weatherData.getWeatherDescription(),
-                        weatherData.getWeatherIcon());
-            } else {
-                log.warn("Response JSON does not contain valid 'weather' array");
-            }
-
-            // Clouds
-            if (root.has("clouds")) {
-                weatherData.setCloudiness(getInteger(root.get("clouds"), "all"));
-                log.debug("Extracted cloudiness: {}%", weatherData.getCloudiness());
-            }
-
-            // Visibility
-            if (root.has("visibility")) {
-                weatherData.setVisibilityMeters(root.get("visibility").asInt());
-                log.debug("Extracted visibility: {} meters", weatherData.getVisibilityMeters());
-            }
-
-            // Rain
-            if (root.has("rain")) {
-                JsonNode rain = root.get("rain");
-                if (rain.has("1h")) {
-                    weatherData.setPrecipitationMm(BigDecimal.valueOf(rain.get("1h").asDouble()));
-                    log.debug("Extracted rain: {} mm/h", weatherData.getPrecipitationMm());
-                }
-            }
-
-            // Snow
-            if (root.has("snow")) {
-                JsonNode snow = root.get("snow");
-                if (snow.has("1h")) {
-                    weatherData.setSnowMm(BigDecimal.valueOf(snow.get("1h").asDouble()));
-                    log.debug("Extracted snow: {} mm/h", weatherData.getSnowMm());
-                }
-            }
-
-            // Sun times
-            if (root.has("sys")) {
-                JsonNode sys = root.get("sys");
-                if (sys.has("sunrise")) {
-                    weatherData.setSunrise(LocalDateTime.ofInstant(
-                            Instant.ofEpochSecond(sys.get("sunrise").asLong()), ZoneId.systemDefault()));
-                    log.debug("Extracted sunrise: {}", weatherData.getSunrise());
-                }
-                if (sys.has("sunset")) {
-                    weatherData.setSunset(LocalDateTime.ofInstant(
-                            Instant.ofEpochSecond(sys.get("sunset").asLong()), ZoneId.systemDefault()));
-                    log.debug("Extracted sunset: {}", weatherData.getSunset());
-                }
+            // Open-Meteo returns snowfall in cm, convert to mm
+            BigDecimal snowCm = getHourlyBigDecimal(hourly, "snowfall", hourIndex);
+            if (snowCm != null) {
+                weatherData.setSnowMm(snowCm.multiply(BigDecimal.TEN));
             }
 
             weatherData.setFetchedAt(LocalDateTime.now());
-            weatherData.setDataSource("openweathermap");
+            weatherData.setDataSource("open-meteo");
 
-            log.info("Successfully parsed complete weather data");
-            log.debug("=== parseWeatherResponse END === success=true");
+            log.info("Successfully parsed weather data: temp={}°C, condition='{}', wind={} m/s",
+                    weatherData.getTemperatureCelsius(), weatherData.getWeatherCondition(), weatherData.getWindSpeedMps());
             return weatherData;
 
         } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
-            log.error("=== JSON PARSING ERROR ===");
-            log.error("Failed to parse weather response as JSON");
-            log.error("Response content: {}", response);
-            log.error("Parse error: {}", e.getMessage(), e);
+            log.error("Failed to parse weather response as JSON: {}", e.getMessage(), e);
             return null;
         } catch (Exception e) {
-            log.error("=== UNEXPECTED ERROR parsing weather response ===");
-            log.error("Exception type: {}", e.getClass().getName());
-            log.error("Error message: {}", e.getMessage());
-            log.error("Response content: {}", response);
-            log.error("Full stack trace:", e);
+            log.error("Unexpected error parsing weather response: {}", e.getMessage(), e);
             return null;
         }
+    }
+
+    private BigDecimal getHourlyBigDecimal(JsonNode hourly, String field, int index) {
+        JsonNode array = hourly.get(field);
+        if (array != null && index < array.size() && !array.get(index).isNull()) {
+            return BigDecimal.valueOf(array.get(index).asDouble());
+        }
+        return null;
+    }
+
+    private Integer getHourlyInteger(JsonNode hourly, String field, int index) {
+        JsonNode array = hourly.get(field);
+        if (array != null && index < array.size() && !array.get(index).isNull()) {
+            return array.get(index).asInt();
+        }
+        return null;
+    }
+
+    /**
+     * Map WMO weather code to a condition string.
+     * See https://open-meteo.com/en/docs#weathervariables
+     */
+    private String mapWmoCodeToCondition(Integer code) {
+        if (code == null) return null;
+        return switch (code) {
+            case 0 -> "Clear";
+            case 1, 2, 3 -> "Clouds";
+            case 45, 48 -> "Fog";
+            case 51, 53, 55 -> "Drizzle";
+            case 56, 57 -> "Drizzle";
+            case 61, 63, 65 -> "Rain";
+            case 66, 67 -> "Rain";
+            case 71, 73, 75, 77 -> "Snow";
+            case 80, 81, 82 -> "Rain";
+            case 85, 86 -> "Snow";
+            case 95, 96, 99 -> "Thunderstorm";
+            default -> "Unknown";
+        };
+    }
+
+    /**
+     * Map WMO weather code to a human-readable description.
+     */
+    private String mapWmoCodeToDescription(Integer code) {
+        if (code == null) return null;
+        return switch (code) {
+            case 0 -> "clear sky";
+            case 1 -> "mainly clear";
+            case 2 -> "partly cloudy";
+            case 3 -> "overcast";
+            case 45 -> "fog";
+            case 48 -> "depositing rime fog";
+            case 51 -> "light drizzle";
+            case 53 -> "moderate drizzle";
+            case 55 -> "dense drizzle";
+            case 56 -> "light freezing drizzle";
+            case 57 -> "dense freezing drizzle";
+            case 61 -> "slight rain";
+            case 63 -> "moderate rain";
+            case 65 -> "heavy rain";
+            case 66 -> "light freezing rain";
+            case 67 -> "heavy freezing rain";
+            case 71 -> "slight snow fall";
+            case 73 -> "moderate snow fall";
+            case 75 -> "heavy snow fall";
+            case 77 -> "snow grains";
+            case 80 -> "slight rain showers";
+            case 81 -> "moderate rain showers";
+            case 82 -> "violent rain showers";
+            case 85 -> "slight snow showers";
+            case 86 -> "heavy snow showers";
+            case 95 -> "thunderstorm";
+            case 96 -> "thunderstorm with slight hail";
+            case 99 -> "thunderstorm with heavy hail";
+            default -> "unknown";
+        };
     }
 
     /**
@@ -363,43 +322,4 @@ public class WeatherService {
         weatherDataRepository.deleteByActivityId(activityId);
     }
 
-    // Helper methods to safely extract values from JSON
-    private BigDecimal getBigDecimal(JsonNode node, String field) {
-        if (node != null && node.has(field) && !node.get(field).isNull()) {
-            try {
-                return BigDecimal.valueOf(node.get(field).asDouble());
-            } catch (Exception e) {
-                log.warn("Failed to extract BigDecimal from field '{}': {}", field, e.getMessage());
-                return null;
-            }
-        }
-        log.debug("Field '{}' not found or is null in node", field);
-        return null;
-    }
-
-    private Integer getInteger(JsonNode node, String field) {
-        if (node != null && node.has(field) && !node.get(field).isNull()) {
-            try {
-                return node.get(field).asInt();
-            } catch (Exception e) {
-                log.warn("Failed to extract Integer from field '{}': {}", field, e.getMessage());
-                return null;
-            }
-        }
-        log.debug("Field '{}' not found or is null in node", field);
-        return null;
-    }
-
-    private String getString(JsonNode node, String field) {
-        if (node != null && node.has(field) && !node.get(field).isNull()) {
-            try {
-                return node.get(field).asText();
-            } catch (Exception e) {
-                log.warn("Failed to extract String from field '{}': {}", field, e.getMessage());
-                return null;
-            }
-        }
-        log.debug("Field '{}' not found or is null in node", field);
-        return null;
-    }
 }
