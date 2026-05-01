@@ -36,9 +36,7 @@ public class ActivitiesViewController {
     @GetMapping("/{id}")
     public String viewActivity(@PathVariable String id, @RequestParam String page, Model model) {
         // The activity data will be loaded via JavaScript API calls
-        if (page != null) {
-            model.addAttribute("page", page);
-        }
+        model.addAttribute("page", page != null ? page : "1");
         return "activities/detail";
     }
 
@@ -46,8 +44,9 @@ public class ActivitiesViewController {
      * Show activity edit page
      */
     @GetMapping("/{id}/edit")
-    public String editActivity(@PathVariable String id) {
+    public String editActivity(@PathVariable String id, @RequestParam String page, Model model) {
         // The activity data will be loaded via JavaScript API calls
+        model.addAttribute("page", page != null ? page : "1");
         return "activities/edit";
     }
 }

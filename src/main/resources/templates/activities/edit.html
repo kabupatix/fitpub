@@ -127,6 +127,7 @@
                             </div>
 
                             <!-- Submit Buttons -->
+                            <p th:text="${'Page: ' + page}"></p>
                             <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                                 <a th:href="@{/activities}" class="btn btn-outline-secondary" id="cancelBtn">
                                     <i class="bi bi-x-circle"></i> Cancel
@@ -165,6 +166,7 @@
         <script th:inline="javascript">
             document.addEventListener('DOMContentLoaded', function() {
                 const activityId = window.location.pathname.split('/').slice(-2, -1)[0];
+                const page = new URLSearchParams(window.location.search).get('page') || 1;
                 const form = document.getElementById('editForm');
                 const loadingIndicator = document.getElementById('loadingIndicator');
                 const editCard = document.getElementById('editCard');
@@ -229,7 +231,7 @@
                     `;
 
                     // Update cancel button to go back to activity detail
-                    cancelBtn.href = `/activities/${activityId}`;
+                    cancelBtn.href = `/activities/${activityId}?page=${page}`;
                 }
 
                 function renderMap(simplifiedTrack) {
@@ -295,7 +297,7 @@
 
                             // Redirect to activity detail page
                             setTimeout(() => {
-                                window.location.href = `/activities/${activityId}`;
+                                window.location.href = `/activities/${activityId}?page=${page}`;
                             }, 1500);
                         } else {
                             const errorData = await response.json();
